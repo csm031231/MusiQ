@@ -1,19 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from User.user_router import router as user_router
 from Api.Api_router import router as api_router
-from Rating.rating_router import router as rating_router
-from fevorites.fevorites_router import router as fevorites_router
-from Region.Region_router import router as Region_router
 from core.database import init_db
 from core.config import get_config
 
 routers = []
-routers.append(user_router)
-routers.append(Region_router)
 routers.append(api_router)
-routers.append(rating_router)
-routers.append(fevorites_router)
 
 
 app = FastAPI(

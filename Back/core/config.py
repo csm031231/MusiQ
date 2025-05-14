@@ -15,7 +15,8 @@ class DefaultConfig(BaseSettings):
         "",
     )
     jwt_expire_minutes: int = os.getenv("JWT_TOKEN_EXPIRE_MINUTES", 600)
-    api_service_key:str = os.getenv("SERVICE_KEY","")
+    LastfmAPIKEY:str = os.getenv("LastfmAPIKEY","")
+    SpotifyAPIKEY:str = os.getenv("SpotifyAPIKEY")
 
 @lru_cache
 def get_config():
