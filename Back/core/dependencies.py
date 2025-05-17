@@ -1,11 +1,14 @@
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
+from core.config import get_config
+
+config = get_config()
 
 # 비밀 키 및 알고리즘 설정
-SECRET_KEY = "your_secret_key"
+SECRET_KEY = config.jwt_secret_key
 ALGORITHM = "HS256"
-EXPIRE_MINUTES = 30
+EXPIRE_MINUTES = config.jwt_expire_minutes
 
 def create_jwt(data: dict):
     # 만료 시간 설정
