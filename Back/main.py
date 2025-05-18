@@ -1,11 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from Api.Api_router import router as api_router
+from User.user_router import router as user_router
+from Artist.artist_router import router as artist_router
+from Playlist.playlist_router import router as playlist_router
+
 from core.database import init_db
 from core.config import get_config
 
 routers = []
 routers.append(api_router)
+routers.append(user_router)
+routers.append(artist_router)
+routers.append(playlist_router)
 
 
 app = FastAPI(
@@ -16,6 +23,7 @@ app = FastAPI(
 
 for router in routers:
     app.include_router(router=router)
+    
 
 app.add_middleware(
     CORSMiddleware,

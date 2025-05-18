@@ -19,7 +19,7 @@ token_info = {
 
 config = get_config()
 
-@router.get("chartPage")
+@router.get("/chartPage")
 async def getTop100():
 
     URL = 'http://ws.audioscrobbler.com/2.0/'
