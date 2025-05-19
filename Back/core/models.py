@@ -8,9 +8,10 @@ from datetime import datetime
 user_favorite_artist = Table(
     'user_favorite_artist',
     Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('artist_id', String, primary_key=True)
+    Column('user_id', Integer, ForeignKey('users.id', ondelete="CASCADE"), primary_key=True),
+    Column('artist_id', String, ForeignKey('artists.id', ondelete="CASCADE"), primary_key=True)
 )
+
 
 class User(Base):
     __tablename__ = "users"
@@ -20,8 +21,8 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(100), nullable=False)
     nickname = Column(String(50), unique=True, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=func.now())
     is_active = Column(Boolean, default=True)
     
     # 관계 정의
@@ -121,7 +122,7 @@ class ArtistComment(Base):
     artist_id = Column(String, ForeignKey("artists.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, server_default=func.now())
 
     user = relationship("User", back_populates="artist_comments")
     artist = relationship("Artist", back_populates="comments")

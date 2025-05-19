@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.database import provide_session
-from core.models import User
+from core.models import User, user_favorite_artist
 from User.user_router import get_current_user
 from Artist.dto import ArtistCommentCreate, ArtistCommentOut, SpotifyArtistOut
 from Artist.crud import (
@@ -128,6 +128,26 @@ async def search_artists(
         
         return artists
     
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to search artists: {str(e)}"
+        )
+    
+# 로그인 없이 접근 가능한 아티스트 검색
+@router.get("/public-search/{query}", response_model=List[SpotifyArtistOut])
+async def public_search_artists(
+    query: str,
+    limit: int = 10
+):
+    try:
+        # Spotify API로 아티스트 검색
+        artists_data = await search_artists_from_spotify(query, limit)
+
+        # 결과 가공 (is_favorite 없이 반환)
+        artists = [SpotifyArtistOut.from_spotify_response(item) for item in artists_data]
+        return artists
+
     except Exception as e:
         raise HTTPException(
             status_code=500,

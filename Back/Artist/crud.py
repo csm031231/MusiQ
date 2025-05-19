@@ -100,3 +100,5 @@ async def get_user_favorite_artist_ids(db: AsyncSession, user_id: int) -> List[s
         select(user_favorite_artist.c.artist_id).where(user_favorite_artist.c.user_id == user_id)
     )
     return [row[0] for row in result.all()]
+
+

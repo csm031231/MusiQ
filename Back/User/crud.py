@@ -50,7 +50,6 @@ async def update_user(db: AsyncSession, user: User, update_data: Dict[str, Any])
     """사용자 정보 업데이트 함수"""
     for key, value in update_data.items():
         setattr(user, key, value)
-    
     await db.commit()
     await db.refresh(user)
     return user
@@ -107,3 +106,4 @@ async def check_favorite_artist(db: AsyncSession, user_id: int, artist_id: str) 
         )
     )
     return result.first() is not None
+
