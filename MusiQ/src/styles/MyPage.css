@@ -1,0 +1,305 @@
+/* src/styles/MyPage.css */
+.mypage {
+    padding-bottom: var(--spacing-xl);
+  }
+  
+  .mypage-container {
+    display: flex;
+    background-color: var(--surface);
+    border-radius: var(--radius-medium);
+    box-shadow: var(--shadow-light);
+    overflow: hidden;
+  }
+  
+  .mypage-sidebar {
+    width: 220px;
+    border-right: 1px solid var(--border-color);
+  }
+  
+  .mypage-tabs {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .tab-button {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
+    text-align: left;
+    color: var(--text-primary);
+    transition: background-color 0.2s ease;
+  }
+  
+  .tab-button:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .tab-button.active {
+    background-color: rgba(98, 0, 238, 0.1);
+    color: var(--primary-color);
+    border-left: 3px solid var(--primary-color);
+  }
+  
+  .mypage-content {
+    flex: 1;
+    padding: var(--spacing-lg);
+    min-height: 400px;
+  }
+  
+  .profile-header {
+    display: flex;
+    gap: var(--spacing-lg);
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .MyPage-profile-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: var(--primary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-on-primary);
+  }
+  
+  .profile-details {
+    flex: 1;
+  }
+  
+  .profile-username {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .profile-email {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .profile-joined {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  
+  .profile-stats {
+    display: flex;
+    justify-content: space-around;
+    background-color: var(--background);
+    border-radius: var(--radius-medium);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .stat-item {
+    text-align: center;
+  }
+  
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+  }
+  
+  .stat-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  
+  .logout-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    padding: var(--spacing-md);
+    background-color: #f5f5f5;
+    color: var(--text-primary);
+    border-radius: var(--radius-small);
+    transition: background-color 0.2s ease;
+  }
+  
+  .logout-button:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .content-subtitle {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+  }
+  
+  .create-playlist-button {
+    width: 100%;
+    padding: var(--spacing-md);
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+    border-radius: var(--radius-small);
+    margin-bottom: var(--spacing-lg);
+    transition: background-color 0.2s ease;
+  }
+  
+  .create-playlist-button:hover {
+    background-color: var(--primary-dark);
+  }
+  
+  .my-playlists-list,
+  .liked-songs-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--spacing-md);
+  }
+  
+  .my-playlist-item,
+  .liked-song-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background-color: var(--background);
+    border-radius: var(--radius-small);
+    transition: background-color 0.2s ease;
+  }
+  
+  .my-playlist-item:hover,
+  .liked-song-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .playlist-thumbnail,
+  .song-thumbnail {
+    width: 50px;
+    height: 50px;
+    background-color: var(--primary-light);
+    border-radius: var(--radius-small);
+    flex-shrink: 0;
+  }
+  
+  .playlist-details,
+  .song-details {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .playlist-name,
+  .song-title {
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .playlist-tracks,
+  .song-artist {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  
+  .empty-state {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: var(--spacing-xl) 0;
+  }
+  
+  .settings-group {
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .settings-group:last-child {
+    border-bottom: none;
+  }
+  
+  .settings-group-title {
+    font-weight: 600;
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .settings-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .settings-label {
+    font-weight: 500;
+  }
+  
+  .settings-input {
+    width: 60%;
+    padding: var(--spacing-sm);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-small);
+    outline: none;
+  }
+  
+  .settings-input:focus {
+    border-color: var(--primary-color);
+  }
+  
+  .save-button {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+    border-radius: var(--radius-small);
+    float: right;
+    transition: background-color 0.2s ease;
+  }
+  
+  .save-button:hover {
+    background-color: var(--primary-dark);
+  }
+  
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+  }
+  
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: 0.3s;
+  }
+  
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+  }
+  
+  input:checked + .toggle-slider {
+    background-color: var(--primary-color);
+  }
+  
+  input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+  }
+  
+ 
