@@ -1,0 +1,92 @@
+/* src/styles/Artist.css */
+.artist-page {
+    padding-bottom: var(--spacing-xl);
+  }
+  
+  .artist-section {
+    margin-bottom: var(--spacing-xl);
+  }
+  
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-lg);
+    color: var(--text-primary);
+  }
+  
+  .artists-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--spacing-md);
+  }
+  
+  .artist-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    background-color: var(--surface);
+    border-radius: var(--radius-medium);
+    padding: var(--spacing-md);
+    box-shadow: var(--shadow-light);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+  }
+  
+  .artist-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-medium);
+  }
+  
+  .artist-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: var(--primary-light);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .artist-info {
+    width: 100%;
+  }
+  
+  .artist-name {
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .artist-genre {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .artist-followers {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+  
+  .genre-tabs {
+    display: flex;
+    gap: var(--spacing-sm);
+    overflow-x: auto;
+    padding-bottom: var(--spacing-sm);
+  }
+  
+  .genre-tab {
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: 9999px;
+    background-color: var(--surface);
+    box-shadow: var(--shadow-light);
+    white-space: nowrap;
+    transition: background-color 0.2s ease;
+  }
+  
+  .genre-tab.active {
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+  }

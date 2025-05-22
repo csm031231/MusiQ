@@ -1,0 +1,41 @@
+/* src/styles/Home.css */
+
+.home-page {
+    padding: var(--spacing-md);
+    transition: margin-left 0.3s ease; /* 사이드바와 동일한 트랜지션 속도 */
+    width: calc(100% - var(--spacing-md) * 2);
+  }
+  
+  /* 기본 상태 (사이드바 닫힘) */
+  .home-page {
+    margin-left: 0;
+  }
+  
+  /* 사이드바가 열렸을 때 */
+  .sidebar.open + .content-container .home-page {
+    margin-left: 12.5%; /* 사이드바 너비와 동일하게 */
+  }
+  
+  .page-title {
+    margin-bottom: var(--spacing-lg);
+    font-size: 1.8rem;
+    font-weight: 700;
+  }
+  
+  .sections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+  }
+  
+  @media (max-width: 768px) {
+    .sections-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    /* 모바일에서는 사이드바가 열려도 전체 화면을 차지 */
+    .sidebar.open + .content-container .home-page {
+      margin-left: 0;
+      width: 100%;
+    }
+  }

@@ -1,0 +1,183 @@
+/* src/styles/Sidebar.css - 완성본 */
+
+/* 사이드바 기본 스타일 */
+.sidebar {
+  width: 12%;
+  height: 100%;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-light);
+  overflow-y: auto;
+  position: fixed;
+  top: 64px; /* 헤더 높이와 같게 */
+  left: 0;
+  bottom: 0;
+  z-index: 90;
+  transform: translateX(-100%); /* 기본적으로 숨김 */
+  transition: transform 0.3s ease;
+}
+
+.sidebar.open {
+  transform: translateX(0); /* open 클래스가 있으면 표시 */
+}
+
+/* 사이드바 내용 영역 */
+.sidebar-nav {
+  padding: var(--spacing-md);
+}
+
+/* 메뉴 목록 */
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--spacing-md) 0;
+}
+
+.nav-item {
+  width: 100%;
+}
+
+/* 구분선 */
+.nav-divider {
+  margin: var(--spacing-md) 0;
+  border: none;
+  border-top: 1px solid var(--border-color);
+}
+
+/* 메뉴 링크 공통 스타일 */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-medium);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease;
+  text-decoration: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.nav-link:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.nav-link.active {
+  background-color: rgba(98, 0, 238, 0.1);
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+/* 메뉴 항목 아이콘 */
+.nav-link svg {
+  flex-shrink: 0;
+}
+
+/* 섹션 제목 */
+.nav-section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: var(--spacing-md) 0 var(--spacing-xs);
+  padding: 0 var(--spacing-md);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 버튼 스타일 (Action 항목) */
+button.nav-link {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+/* 플레이리스트 헤더 */
+.playlist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-md);
+  margin-bottom: var(--spacing-xs);
+}
+
+.playlist-link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 500;
+  flex: 1;
+}
+
+.playlist-link.active {
+  color: var(--primary-color);
+}
+
+/* 플레이리스트 목록 */
+.playlist-menu {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--spacing-md) var(--spacing-xl);
+}
+
+.playlist-item {
+  margin-bottom: var(--spacing-xs);
+}
+
+.playlist-item .nav-link {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.playlist-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 플레이리스트 항목 호버 효과 */
+.playlist-item:hover .nav-link {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* 플레이리스트 삭제 버튼 */
+.delete-playlist-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  margin-left: var(--spacing-xs);
+  opacity: 0.7;
+}
+
+.delete-playlist-button:hover {
+  color: var(--error);
+  background-color: rgba(176, 0, 32, 0.1);
+  opacity: 1;
+}
+
+
+
