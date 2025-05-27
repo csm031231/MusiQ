@@ -1,100 +1,158 @@
 /* src/styles/Chart.css */
 .chart-page {
-    padding-bottom: var(--spacing-xl);
-  }
-  
-  .chart-filters {
-    display: flex;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
-    overflow-x: auto;
-    padding-bottom: var(--spacing-sm);
-  }
-  
-  .chart-filter {
-    padding: var(--spacing-xs) var(--spacing-md);
-    border-radius: 9999px;
-    background-color: var(--surface);
-    box-shadow: var(--shadow-light);
-    white-space: nowrap;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-  
-  .chart-filter.active {
-    background-color: var(--primary-color);
-    color: var(--text-on-primary);
-  }
-  
-  .chart-list {
-    background-color: var(--surface);
-    border-radius: var(--radius-medium);
-    overflow: hidden;
-    box-shadow: var(--shadow-light);
-  }
-  
-  .chart-item {
-    display: flex;
-    align-items: center;
-    padding: var(--spacing-md);
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s ease;
-  }
-  
-  .chart-item:last-child {
-    border-bottom: none;
-  }
-  
-  .chart-item:hover {
-    background-color: rgba(0, 0, 0, 0.02);
-  }
-  
-  .chart-rank {
-    font-size: 1.25rem;
-    font-weight: 700;
-    width: 40px;
-    text-align: center;
-    color: var(--text-primary);
-  }
-  
-  .chart-rank.top-1 {
-    color: #f44336; /* 빨간색 */
-  }
-  
-  .chart-rank.top-3 {
-    color: var(--primary-color);
-  }
-  
-  .chart-image {
-    width: 50px;
-    height: 50px;
-    background-color: var(--primary-light);
-    border-radius: var(--radius-small);
-    margin: 0 var(--spacing-md);
-  }
-  
-  .chart-info {
-    flex: 1;
-    min-width: 0;
-  }
-  
-  .chart-title {
-    font-weight: 500;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  
-  .chart-artist {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  
-  .chart-actions {
-    display: flex;
-    gap: var(--spacing-sm);
-  }
+  padding-bottom: var(--spacing-xl);
+}
+
+.chart-filters {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  overflow-x: auto;
+  padding-bottom: var(--spacing-sm);
+}
+
+.chart-filter {
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: 9999px;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-light);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border: none;
+}
+
+.chart-filter:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chart-filter.active {
+  background-color: var(--primary-color);
+  color: var(--text-on-primary);
+}
+
+.chart-filter:hover:not(:disabled) {
+  background-color: var(--primary-light);
+}
+
+/* 로딩 스타일 추가 */
+.loading {
+  text-align: center;
+  padding: var(--spacing-xl);
+  background-color: var(--surface);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--shadow-light);
+  margin-bottom: var(--spacing-lg);
+}
+
+.chart-list {
+  background-color: var(--surface);
+  border-radius: var(--radius-medium);
+  overflow: visible;
+  box-shadow: var(--shadow-light);
+  padding: var(--spacing-sm);
+}
+
+.chart-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md);
+  margin: 0 var(--spacing-xs);
+  border-bottom: 1px solid var(--border-color);
+  border-radius: var(--radius-small);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.chart-item:last-child {
+  border-bottom: none;
+}
+
+.chart-item:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+  transform: translateY(-3px) scaleX(1.02) scaleY(1.01);
+  margin: 0 calc(-1 * var(--spacing-xs));
+  padding: var(--spacing-md) calc(var(--spacing-md) + var(--spacing-xs));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+}
+
+.chart-rank {
+  font-size: 1.25rem;
+  font-weight: 700;
+  width: 40px;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.chart-rank.top-1 {
+  color: #f44336; /* 빨간색 */
+}
+
+.chart-rank.top-3 {
+  color: var(--primary-color);
+}
+
+.chart-image {
+  width: 50px;
+  height: 50px;
+  background-color: var(--primary-light);
+  border-radius: var(--radius-small);
+  margin: 0 var(--spacing-md);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chart-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.chart-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-artist {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chart-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.chart-action {
+  padding: var(--spacing-xs);
+  background: none;
+  border: none;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-action:hover {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+}
