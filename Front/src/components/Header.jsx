@@ -161,7 +161,7 @@ const Header = ({ toggleSidebar, setActiveModal }) => {
             )}
           </div>
         ) : (
-          <button className="login-button" onClick={() => setActiveModal('login')}>
+          <button className="header-login-button" onClick={() => setActiveModal('login')}>
             <LogIn size={16} />
             <span>로그인</span>
           </button>
