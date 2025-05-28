@@ -52,6 +52,8 @@
   overflow: visible;
   box-shadow: var(--shadow-light);
   padding: var(--spacing-sm);
+  margin-left:1%;
+  margin-right:1%;
 }
 
 .chart-item {
@@ -155,4 +157,9 @@
 .chart-action:hover {
   background-color: var(--primary-light);
   color: var(--primary-color);
+}
+
+.page-title {
+  margin-top:16px;
+  margin-left:2%
 }

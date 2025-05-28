@@ -62,12 +62,13 @@ const Header = ({ toggleSidebar, setActiveModal }) => {
     };
   }, []);
   
-  // 검색 처리
+  // 검색 처리 - 검색 페이지로 이동하면서 쿼리 전달
   const handleSearch = (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     
-    navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+    // 검색 페이지로 이동하면서 검색어를 URL 파라미터로 전달
+    navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
     setSearchQuery('');
   };
   

@@ -144,3 +144,35 @@ ul {
   }
 }
 
+/* 레이아웃 관련 스타일 추가 */
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.content-container {
+  flex: 1;
+  padding: 0; /* 기본 패딩 제거 */
+  margin: 0;
+}
+
+/* 검색 페이지 전용 스타일 */
+.search-page {
+  margin: 0;
+  padding: 0;
+}
+
+/* 헤더와 콘텐츠 사이 공백 제거 */
+.header + .content-container,
+.header + * .content-container,
+.header ~ .content-container {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* main-content 패딩 제거 */
+.main-content {
+  padding: 0;
+  margin: 0;
+}
