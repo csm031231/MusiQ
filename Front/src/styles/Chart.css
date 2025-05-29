@@ -1,165 +1,382 @@
 /* src/styles/Chart.css */
+
 .chart-page {
-  padding-bottom: var(--spacing-xl);
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
-.chart-filters {
+.chart-header {
   display: flex;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-  overflow-x: auto;
-  padding-bottom: var(--spacing-sm);
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 12px;
 }
 
-.chart-filter {
-  padding: var(--spacing-xs) var(--spacing-md);
-  border-radius: 9999px;
-  background-color: var(--surface);
-  box-shadow: var(--shadow-light);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  border: none;
+.page-title {
+  font-size: 2.0rem;
+  font-weight: bold;
+  color: #1a1a1a;
+  margin: 0;
 }
 
-.chart-filter:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+/* Spotify 로딩 진행률 표시 */
+.spotify-loading-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #1db954, #1ed760);
+  color: white;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3);
 }
 
-.chart-filter.active {
-  background-color: var(--primary-color);
-  color: var(--text-on-primary);
+.spotify-loading-info .spinning {
+  animation: spin 1s linear infinite;
 }
 
-.chart-filter:hover:not(:disabled) {
-  background-color: var(--primary-light);
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-/* 로딩 스타일 추가 */
-.loading {
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-left: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: white;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* 로딩 상태 */
+.chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 15px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #1db954;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* 에러 상태 */
+.chart-error {
   text-align: center;
-  padding: var(--spacing-xl);
-  background-color: var(--surface);
-  border-radius: var(--radius-medium);
-  box-shadow: var(--shadow-light);
-  margin-bottom: var(--spacing-lg);
+  padding: 40px 20px;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 8px;
+  margin: 20px 0;
 }
 
+.chart-error p {
+  color: #c33;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+}
+
+.retry-button {
+  background: #1db954;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.3s ease;
+}
+
+.retry-button:hover {
+  background: #1ed760;
+}
+
+/* 차트 리스트 */
 .chart-list {
-  background-color: var(--surface);
-  border-radius: var(--radius-medium);
-  overflow: visible;
-  box-shadow: var(--shadow-light);
-  padding: var(--spacing-sm);
-  margin-left:1%;
-  margin-right:1%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .chart-item {
   display: flex;
   align-items: center;
-  padding: var(--spacing-md);
-  margin: 0 var(--spacing-xs);
-  border-bottom: 1px solid var(--border-color);
-  border-radius: var(--radius-small);
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  cursor: pointer;
-  position: relative;
-}
-
-.chart-item:last-child {
-  border-bottom: none;
+  gap: 16px;
 }
 
 .chart-item:hover {
-  background-color: rgba(0, 0, 0, 0.02);
-  transform: translateY(-3px) scaleX(1.02) scaleY(1.01);
-  margin: 0 calc(-1 * var(--spacing-xs));
-  padding: var(--spacing-md) calc(var(--spacing-md) + var(--spacing-xs));
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-  z-index: 10;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
 }
 
+/* 순위 표시 */
 .chart-rank {
-  font-size: 1.25rem;
-  font-weight: 700;
-  width: 40px;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #666;
+  min-width: 40px;
   text-align: center;
-  color: var(--text-primary);
 }
 
 .chart-rank.top-1 {
-  color: #f44336; /* 빨간색 */
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  font-size: 1.8rem;
 }
 
 .chart-rank.top-3 {
-  color: var(--primary-color);
+  color: #ff6b35;
+  font-size: 1.6rem;
 }
 
+/* 이미지 컨테이너 */
 .chart-image {
-  width: 50px;
-  height: 50px;
-  background-color: var(--primary-light);
-  border-radius: var(--radius-small);
-  margin: 0 var(--spacing-md);
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-shrink: 0;
 }
 
-.chart-image img {
+.image-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.track-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: all 0.3s ease;
 }
 
+.track-image.lastfm-image {
+  filter: brightness(0.9) contrast(1.1);
+}
+
+.track-image.spotify-loaded {
+  filter: none;
+  box-shadow: 0 0 8px rgba(29, 185, 84, 0.3);
+}
+
+.placeholder-image {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f0f0f0, #e0e0e0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+}
+
+/* 이미지 품질 표시 */
+.image-quality-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 0.6rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: bold;
+}
+
+.image-quality-indicator.spotify {
+  background: linear-gradient(135deg, #1db954, #1ed760);
+}
+
+/* 트랙 정보 */
 .chart-info {
   flex: 1;
   min-width: 0;
 }
 
 .chart-title {
-  font-weight: 500;
-  color: var(--text-primary);
-  white-space: nowrap;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 4px 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chart-artist {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
+  font-size: 0.95rem;
+  color: #666;
+  margin: 0 0 8px 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.chart-stats {
+  display: flex;
+  gap: 15px;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.chart-stats span {
+  display: flex;
+  align-items: center;
+}
+
+/* 액션 버튼들 */
 .chart-actions {
   display: flex;
-  gap: var(--spacing-sm);
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .chart-action {
-  padding: var(--spacing-xs);
-  background: none;
-  border: none;
-  border-radius: var(--radius-small);
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: #f5f5f5;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
 .chart-action:hover {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
+  background: #1db954;
+  color: white;
+  transform: scale(1.1);
 }
 
-.page-title {
-  margin-top:16px;
-  margin-left:2%
+.chart-action.update-image {
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: white;
+}
+
+.chart-action.update-image:hover {
+  background: linear-gradient(135deg, #ff8c42, #ffa726);
+  transform: scale(1.1);
+}
+
+/* 데이터 없음 */
+.chart-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 1.2rem;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .chart-page {
+    padding: 15px;
+  }
+  
+  .page-title {
+    font-size: 2rem;
+  }
+  
+  .chart-item {
+    padding: 12px;
+    gap: 12px;
+  }
+  
+  .chart-image {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .chart-rank {
+    font-size: 1.2rem;
+    min-width: 35px;
+  }
+  
+  .chart-rank.top-1 {
+    font-size: 1.4rem;
+  }
+  
+  .chart-rank.top-3 {
+    font-size: 1.3rem;
+  }
+  
+  .chart-title {
+    font-size: 1rem;
+  }
+  
+  .chart-artist {
+    font-size: 0.9rem;
+  }
+  
+  .chart-stats {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .chart-actions {
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .chart-action {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .spotify-loading-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .progress-bar {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .chart-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .chart-item > div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+  
+  .chart-actions {
+    flex-direction: row;
+    justify-content: center;
+    width: 100%;
+  }
 }

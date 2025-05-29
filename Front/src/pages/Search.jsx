@@ -116,8 +116,6 @@ const Search = () => {
 
   return (
     <div className="search-page">
-      {/* 검색 결과가 있을 때는 제목 숨김 */}
-
       {/* 검색 중 로딩 */}
       {isSearching && (
         <div className="search-loading">
@@ -216,13 +214,7 @@ const Search = () => {
                 <h3 className="section-title">트랙 ({filteredResults.tracks.length})</h3>
                 <div className="results-list">
                   {filteredResults.tracks.map(track => (
-                    <div key={track.id} className="result-item track-item" style={{ 
-                      borderLeft: 'none !important',
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      padding: '16px',
-                      gap: '16px'
-                    }}>
+                    <div key={track.id} className="result-item track-item">
                       <div className="result-image small">
                         <Music size={24} />
                       </div>
