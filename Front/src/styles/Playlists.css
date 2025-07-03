@@ -1,0 +1,40 @@
+/* src/styles/Playlists.css (계속) */
+.playlist-card {
+    background-color: var(--surface);
+    border-radius: var(--radius-medium);
+    overflow: hidden;
+    box-shadow: var(--shadow-light);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+  }
+  
+  .playlist-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-medium);
+  }
+  
+  .playlist-image {
+    width: 100%;
+    padding-top: 100%; /* 1:1 비율 유지 */
+    background-color: var(--primary-light);
+    position: relative;
+  }
+  
+  .playlist-info {
+    padding: var(--spacing-md);
+  }
+  
+  .playlist-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .playlist-details {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
