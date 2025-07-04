@@ -55,7 +55,7 @@ function App() {
       </Modal>
       
       <Modal isOpen={activeModal === 'mypage'} onClose={closeModal}>
-        <MyPage setActiveModal={setActiveModal} />
+        <MyPage setActiveModal={setActiveModal} />sadas
       </Modal>
     </Router>
   );
