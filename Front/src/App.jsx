@@ -38,6 +38,7 @@ function App() {
         <Route path="/" element={<Layout setActiveModal={setActiveModal} />}>
           <Route index element={<Home />} />
           <Route path="playlists" element={<Playlists />} />
+          <Route path="my-playlists" element={<Playlists />} />
           <Route path="search" element={<Search />} />
           <Route path="chart" element={<Chart />} />
           <Route path="artist" element={<Artist />} />
