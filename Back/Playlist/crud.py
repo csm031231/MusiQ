@@ -80,3 +80,4 @@ async def check_song_liked(db: AsyncSession, user_id: int, song_id: int) -> Opti
     )
     
     return result.scalars().first()
+

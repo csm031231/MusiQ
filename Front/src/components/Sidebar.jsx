@@ -1,4 +1,3 @@
-// src/components/Sidebar.jsx
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
@@ -14,33 +13,83 @@ import {
   FileMusic,
   Library,
   Heart,
-  Trash2, // 삭제 아이콘 추가
-  MoreHorizontal // 메뉴 아이콘 추가
+  Trash2,
+  MoreHorizontal,
+  Plus,
+  X,
+  ThumbsUp
 } from 'lucide-react';
+import axios from 'axios';
 import '../styles/Sidebar.css';
+
+// API 설정 (목록 조회용만)
+const API_BASE_URL = 'http://54.180.116.4:8000'; // 로컬 테스트용
+
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+apiClient.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('accessToken');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+const api = {
+  getMyPlaylists: async () => {
+    try {
+      return await apiClient.get('/playlists/my-playlists');
+    } catch (error) {
+      console.error('플레이리스트 목록 조회 실패:', error);
+      throw error;
+    }
+  }
+};
 
 const Sidebar = ({ isOpen, closeSidebar }) => {
   const navigate = useNavigate();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [playlists, setPlaylists] = useState([]);
-  const [hoverPlaylistId, setHoverPlaylistId] = useState(null); // 호버 상태 추가
   
-  // 로그인 상태 확인
+  // 모달 상태 (디자인만)
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newPlaylist, setNewPlaylist] = useState({
+    title: '',
+    description: ''
+  });
+
+  // 로그인 상태 확인 및 플레이리스트 목록 조회만
   useEffect(() => {
-    const checkLoginStatus = () => {
-      const userToken = localStorage.getItem('userToken');
-      setIsLoggedIn(!!userToken);
+    const checkLoginStatus = async () => {
+      const accessToken = localStorage.getItem('accessToken');
+      setIsLoggedIn(!!accessToken);
       
-      // 로그인되어 있으면 내 플레이리스트 목록 가져오기
-      if (userToken) {
-        // 실제로는 API에서 가져와야 함
-        // 여기서는 로컬스토리지를 임시로 사용
-        const savedPlaylists = localStorage.getItem('userPlaylists');
-        if (savedPlaylists) {
-          try {
-            setPlaylists(JSON.parse(savedPlaylists));
-          } catch (error) {
-            console.error('플레이리스트 정보 파싱 오류:', error);
+      if (accessToken) {
+        try {
+          const playlistsData = await api.getMyPlaylists();
+          setPlaylists(playlistsData);
+        } catch (error) {
+          console.error('플레이리스트 로드 실패:', error);
+          if (error.response?.status !== 401) {
             setPlaylists([]);
           }
         }
@@ -51,95 +100,37 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     
     checkLoginStatus();
     
-    // 로그인 상태 변경 이벤트 리스닝
-    window.addEventListener('login-status-change', checkLoginStatus);
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'userToken' || e.key === 'userPlaylists') {
-        checkLoginStatus();
-      }
-    });
-    
-    // 플레이리스트 변경 이벤트
+    // 플레이리스트 변경 이벤트 리스닝
     window.addEventListener('playlist-updated', checkLoginStatus);
     
     return () => {
-      window.removeEventListener('login-status-change', checkLoginStatus);
-      window.removeEventListener('storage', checkLoginStatus);
       window.removeEventListener('playlist-updated', checkLoginStatus);
     };
   }, []);
-  
-  // 새 플레이리스트 생성
-  const createNewPlaylist = () => {
-    // 만약 로그인되어 있지 않다면 로그인 페이지로 이동
-    if (!isLoggedIn) {
-      closeSidebar();
-      navigate('/login');
-      return;
-    }
-    
-    // 플레이리스트 생성 로직 (실제로는 API 호출)
-    const newPlaylistName = `내 플레이리스트 ${playlists.length + 1}`;
-    const newPlaylist = {
-      id: Date.now(), // 임시 ID
-      name: newPlaylistName,
-      songs: []
+
+  // 모달에서 생성 버튼 클릭 시 - 실제 기능은 playlist 페이지에 위임
+  const handleCreatePlaylist = () => {
+    // 플레이리스트 데이터를 전역 이벤트로 전달
+    const playlistData = {
+      title: newPlaylist.title,
+      description: newPlaylist.description,
+      is_public: false
     };
-    
-    // 새 플레이리스트 추가
-    const updatedPlaylists = [...playlists, newPlaylist];
-    
-    // 로컬 스토리지에 저장 (실제로는 API에 저장)
-    localStorage.setItem('userPlaylists', JSON.stringify(updatedPlaylists));
-    
-    // 상태 업데이트
-    setPlaylists(updatedPlaylists);
-    
-    // 이벤트 발생
-    window.dispatchEvent(new Event('playlist-updated'));
-    
-    // 새 플레이리스트 페이지로 이동
+
+    // 커스텀 이벤트로 플레이리스트 페이지에 생성 요청
+    window.dispatchEvent(new CustomEvent('create-playlist-request', {
+      detail: playlistData
+    }));
+
+    // 모달 닫기 및 플레이리스트 페이지로 이동
+    setShowCreateModal(false);
+    setNewPlaylist({ title: '', description: '' });
     closeSidebar();
-    navigate(`/my-playlists/${newPlaylist.id}`);
-  };
-  
-  // 플레이리스트 삭제
-  const deletePlaylist = (playlistId, event) => {
-    // 이벤트 전파 중단 (NavLink 클릭 방지)
-    event.stopPropagation();
-    event.preventDefault();
-    
-    // 삭제 확인
-    if (window.confirm('이 플레이리스트를 삭제하시겠습니까?')) {
-      // 플레이리스트 삭제 로직 (실제로는 API 호출)
-      const updatedPlaylists = playlists.filter(playlist => playlist.id !== playlistId);
-      
-      // 로컬 스토리지에 저장 (실제로는 API에 저장)
-      localStorage.setItem('userPlaylists', JSON.stringify(updatedPlaylists));
-      
-      // 상태 업데이트
-      setPlaylists(updatedPlaylists);
-      
-      // 이벤트 발생
-      window.dispatchEvent(new Event('playlist-updated'));
-      
-      // 만약 현재 보고 있는 플레이리스트가 삭제된 경우 홈으로 이동
-      if (window.location.pathname.includes(`/my-playlists/${playlistId}`)) {
-        navigate('/my-playlists');
-      }
-    }
+    navigate('/my-playlists');
   };
   
   // 파일 업로드 처리
   const handleFileUpload = () => {
-    // 만약 로그인되어 있지 않다면 로그인 페이지로 이동
-    if (!isLoggedIn) {
-      closeSidebar();
-      navigate('/login');
-      return;
-    }
-    
-    // 파일 업로드 트리거
     document.getElementById('music-file-upload').click();
   };
   
@@ -147,11 +138,8 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
   const handleFileChange = (e) => {
     const files = e.target.files;
     if (files.length > 0) {
-      // 선택된 파일을 처리하는 페이지로 이동하거나 상태에 저장
       closeSidebar();
       navigate('/upload-music', { state: { files } });
-      
-      // 파일 입력 초기화 (동일 파일 재선택 가능하도록)
       e.target.value = null;
     }
   };
@@ -166,11 +154,11 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
 
   // 로그인한 사용자를 위한 기타 메뉴 항목
   const otherUserItems = [
-    { to: '/liked-songs', icon: <Heart size={20} />, label: '좋아요한 음악' },
+    { to: '/liked-songs', icon: <ThumbsUp size={20} />, label: '좋아요 표시한 음악' },
     { 
       action: (e) => {
         handleFileUpload();
-        closeSidebar(); // 명시적으로 사이드바 닫기 추가
+        closeSidebar();
       }, 
       icon: <FileMusic size={20} />, 
       label: '음악 파일 업로드' 
@@ -178,135 +166,188 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
   ];
   
   return (
-    <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
-      <nav className="sidebar-nav">
-        <ul className="nav-menu">
-          {menuItems.map((item) => (
-            <li key={item.to} className="nav-item">
-              <NavLink 
-                to={item.to} 
-                className={({ isActive }) => 
-                  isActive ? 'nav-link active' : 'nav-link'
-                }
-                onClick={() => {
-                  console.log('메뉴 항목 클릭: ' + item.label);
-                  closeSidebar();
-                }}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-        
-        {isLoggedIn && (
-          <>
-            <h3 className="nav-section-title">
-              <div className="section-header">
-                <span>라이브러리</span>
-              </div>
-            </h3>
-            
-            {/* 내 플레이리스트 헤더 */}
-            <div className="playlist-header">     
+    <>
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+        <nav className="sidebar-nav">
+          <ul className="nav-menu">
+            {menuItems.map((item) => (
+              <li key={item.to} className="nav-item">
                 <NavLink 
-                  to="/my-playlists" 
+                  to={item.to} 
                   className={({ isActive }) => 
-                    isActive ? 'playlist-link active' : 'playlist-link'
+                    isActive ? 'nav-link active' : 'nav-link'
                   }
-                  onClick={closeSidebar}
+                  onClick={() => {
+                    console.log('메뉴 항목 클릭: ' + item.label);
+                    closeSidebar();
+                  }}
                 >
-                  <Library size={20} />
-                  <span>내 플레이리스트</span>
-                </NavLink>             
+                  {item.icon}
+                  <span>{item.label}</span>
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+          
+          {/* 라이브러리 섹션 */}
+          <h3 className="nav-section-title">
+            <div className="section-header">
+              <span>라이브러리</span>
             </div>
-            
-            {/* 내 플레이리스트 목록 */}
-            {playlists.length > 0 && (
-              <ul className="playlist-menu">
-                {playlists.map((playlist) => (
-                  <li 
-                    key={playlist.id} 
-                    className="nav-item playlist-item"
-                    onMouseEnter={() => setHoverPlaylistId(playlist.id)}
-                    onMouseLeave={() => setHoverPlaylistId(null)}
+          </h3>
+          
+          {/* 내 플레이리스트 헤더 */}
+          <div className="playlist-header">     
+              <NavLink 
+                to="/my-playlists" 
+                className={({ isActive }) => 
+                  isActive ? 'playlist-link active' : 'playlist-link'
+                }
+                onClick={closeSidebar}
+              >
+                <Library size={20} />
+                <span>최근에 만든 플레이리스트</span>
+              </NavLink>
+              
+              {/* 플러스 버튼 - 모달만 오픈 */}
+              <button 
+                className="create-playlist-btn"
+                onClick={() => setShowCreateModal(true)}
+                title="새 플레이리스트 만들기"
+              >
+                <Plus size={16} />
+              </button>
+          </div>
+          
+          {/* 내 플레이리스트 목록 */}
+          {playlists.length > 0 && (
+            <ul className="playlist-menu">
+              {playlists.map((playlist) => (
+                <li 
+                  key={playlist.id} 
+                  className="nav-item playlist-item"
+                >
+                  <NavLink 
+                    to={`/playlists/${playlist.id}`}
+                    className={({ isActive }) => 
+                      isActive ? 'nav-link active' : 'nav-link'
+                    }
+                    onClick={closeSidebar}
                   >
-                    <NavLink 
-                      to={`/my-playlists/${playlist.id}`} 
-                      className={({ isActive }) => 
-                        isActive ? 'nav-link active' : 'nav-link'
-                      }
-                      onClick={closeSidebar}
-                    >
-                      <span className="playlist-name">{playlist.name}</span>
-                      
-                      {/* 삭제 버튼 - 호버 시에만 표시 */}
-                      {hoverPlaylistId === playlist.id && (
-                        <button 
-                          className="delete-playlist-button"
-                          onClick={(e) => deletePlaylist(playlist.id, e)}
-                          title="플레이리스트 삭제"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            )}
-            
-            {/* 기타 메뉴 항목 */}
-            <ul className="nav-menu">
-              {otherUserItems.map((item, index) => (
-                <li key={index} className="nav-item">
-                  {item.to ? (
-                    <NavLink 
-                      to={item.to} 
-                      className={({ isActive }) => 
-                        isActive ? 'nav-link active' : 'nav-link'
-                      }
-                      onClick={() => {
-                        console.log('라이브러리 항목 클릭: ' + item.label);
-                        closeSidebar();
-                      }}
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </NavLink>
-                  ) : (
-                    <button 
-                      className="nav-link" 
-                      onClick={(e) => {
-                        console.log('버튼 클릭: ' + item.label);
-                        item.action(e);
-                      }}
-                    >
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </button>
-                  )}
+                    <span className="playlist-name">{playlist.title}</span>
+                  </NavLink>
                 </li>
               ))}
             </ul>
-          </>
-        )}
+          )}
+          
+          {/* 기타 메뉴 항목 */}
+          <ul className="nav-menu">
+            {otherUserItems.map((item, index) => (
+              <li key={index} className="nav-item">
+                {item.to ? (
+                  <NavLink 
+                    to={item.to} 
+                    className={({ isActive }) => 
+                      isActive ? 'nav-link active' : 'nav-link'
+                    }
+                    onClick={() => {
+                      console.log('라이브러리 항목 클릭: ' + item.label);
+                      closeSidebar();
+                    }}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </NavLink>
+                ) : (
+                  <button 
+                    className="nav-link" 
+                    onClick={(e) => {
+                      console.log('버튼 클릭: ' + item.label);
+                      item.action(e);
+                    }}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          
+          <hr className="nav-divider" />      
+        </nav>
         
-        <hr className="nav-divider" />      
-      </nav>
-      
-      {/* 숨겨진 파일 업로드 입력 */}
-      <input
-        type="file"
-        id="music-file-upload"
-        accept="audio/*"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-        multiple
-      />
-    </aside>
+        {/* 숨겨진 파일 업로드 입력 */}
+        <input
+          type="file"
+          id="music-file-upload"
+          accept="audio/*"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+          multiple
+        />
+      </aside>
+
+      {/* 전체화면 모달 - 디자인만, 실제 기능은 playlist 페이지에서 처리 */}
+      {showCreateModal && (
+        <div className="fullscreen-modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="fullscreen-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="fullscreen-modal-header">
+              <button 
+                className="fullscreen-modal-close-btn"
+                onClick={() => setShowCreateModal(false)}
+              >
+                <X size={24} />
+              </button>
+              <h2>새 재생목록</h2>
+            </div>
+            
+            <div className="fullscreen-modal-body">
+              <div className="playlist-form">
+                <div className="form-field">
+                  <label htmlFor="playlist-title">제목</label>
+                  <input
+                    id="playlist-title"
+                    type="text"
+                    placeholder="재생목록의 제목을 입력하세요"
+                    value={newPlaylist.title}
+                    onChange={(e) => setNewPlaylist(prev => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
+                
+                <div className="form-field">
+                  <label htmlFor="playlist-description">설명</label>
+                  <textarea
+                    id="playlist-description"
+                    placeholder="재생목록에 대해 설명해 주세요"
+                    value={newPlaylist.description}
+                    onChange={(e) => setNewPlaylist(prev => ({ ...prev, description: e.target.value }))}
+                    rows="4"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="fullscreen-modal-footer">
+              <button 
+                className="cancel-button"
+                onClick={() => setShowCreateModal(false)}
+              >
+                취소
+              </button>
+              <button 
+                className="create-button"
+                onClick={handleCreatePlaylist}
+                disabled={!newPlaylist.title.trim()}
+              >
+                만들기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
-
 export default Sidebar;

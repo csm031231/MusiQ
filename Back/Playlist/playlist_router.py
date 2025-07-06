@@ -389,3 +389,39 @@ async def get_liked_songs(
         liked_songs.append(song_info)
     
     return liked_songs
+
+
+# 플레이리스트 삭제
+@router.delete("/{playlist_id}")
+async def delete_playlist(
+    playlist_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(provide_session)
+):
+    # 플레이리스트 존재 및 권한 확인
+    result = await db.execute(
+        select(Playlist).where(
+            and_(
+                Playlist.id == playlist_id,
+                Playlist.user_id == current_user.id
+            )
+        )
+    )
+    
+    playlist = result.scalars().first()
+    if not playlist:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Playlist not found or you don't have permission to delete it"
+        )
+    
+    # 플레이리스트 관련 데이터 삭제 (관련 노래들도 함께 삭제)
+    # 1. 플레이리스트-노래 관계 삭제
+    stmt = delete(PlaylistSong).where(PlaylistSong.playlist_id == playlist_id)
+    await db.execute(stmt)
+    
+    # 2. 플레이리스트 삭제
+    await db.delete(playlist)
+    await db.commit()
+    
+    return {"message": "Playlist deleted successfully"}
