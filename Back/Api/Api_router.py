@@ -1,13 +1,9 @@
 import requests
 import json
-import asyncio
-import aiohttp
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from flask import Flask, render_template
-from core.config import get_config
-import urllib.parse
 import base64
 from datetime import datetime, timedelta
+from fastapi import APIRouter, HTTPException
+from core.config import get_config
 from typing import List, Optional, Dict
 
 router = APIRouter(
@@ -15,6 +11,7 @@ router = APIRouter(
     tags=["api"]
 )
 
+# 토큰 정보 저장
 token_info = {
     "access_token": None,
     "expires_at": None
@@ -22,20 +19,93 @@ token_info = {
 
 config = get_config()
 
-# 이미지 캐시 (메모리 캐시)
-image_cache = {}
-# 차트 데이터 캐시
-chart_cache = {
-    "data": None,
-    "last_updated": None
-}
+def get_spotify_token():
+    """Spotify API 토큰 가져오기"""
+    global token_info
+
+    CLIENT_ID = config.SpotifyAPIKEY
+    CLIENT_SECRET = config.SpotifySecretKey
+
+    # 토큰이 없거나 만료 예정인 경우 새로 발급
+    if (token_info["access_token"] is None or 
+        token_info["expires_at"] is None or 
+        datetime.now() >= token_info["expires_at"] - timedelta(minutes=10)):
+        
+        try:
+            auth_bytes = f"{CLIENT_ID}:{CLIENT_SECRET}".encode('ascii')
+            auth_base64 = base64.b64encode(auth_bytes).decode('ascii')
+            
+            auth_url = 'https://accounts.spotify.com/api/token'
+            headers = {
+                'Authorization': f'Basic {auth_base64}',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            data = {'grant_type': 'client_credentials'}
+            
+            response = requests.post(auth_url, headers=headers, data=data, timeout=10)
+            
+            if response.status_code != 200:
+                raise Exception(f"Failed to get Spotify token: {response.text}")
+            
+            token_data = response.json()
+            token_info["access_token"] = token_data["access_token"]
+            expires_in = token_data.get("expires_in", 3600)
+            token_info["expires_at"] = datetime.now() + timedelta(seconds=expires_in)
+            
+            print("Successfully obtained Spotify token")
+            
+        except Exception as e:
+            print(f"Error getting Spotify token: {str(e)}")
+            raise Exception(f"Failed to get Spotify token: {str(e)}")
+    
+    return token_info["access_token"]
+
+def get_spotify_image(track_name: str, artist_name: str) -> Optional[str]:
+    """Spotify에서 트랙 이미지 가져오기"""
+    try:
+        access_token = get_spotify_token()
+        
+        search_url = 'https://api.spotify.com/v1/search'
+        headers = {
+            'Authorization': f'Bearer {access_token}'
+        }
+        
+        # 검색 쿼리
+        query = f'track:"{track_name}" artist:"{artist_name}"'
+        params = {
+            'q': query,
+            'type': 'track',
+            'limit': 1,
+        }
+        
+        response = requests.get(search_url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            tracks = data.get('tracks', {}).get('items', [])
+            
+            if tracks:
+                track = tracks[0]
+                album_images = track.get('album', {}).get('images', [])
+                
+                if album_images:
+                    # 300x300 크기 우선 선택, 없으면 첫 번째 이미지
+                    for img in album_images:
+                        if img.get('height') == 300:
+                            return img.get('url')
+                    
+                    return album_images[0].get('url')
+        
+        return None
+                        
+    except Exception as e:
+        print(f"Error fetching Spotify image for {track_name} - {artist_name}: {str(e)}")
+        return None
 
 @router.get("/chartPage")
-async def getTop100(background_tasks: BackgroundTasks):
+async def getTop100():
     """
-    단계별 로딩: 
-    1. Last.fm 데이터를 빠르게 반환
-    2. 백그라운드에서 Spotify 이미지 업데이트
+    Last.fm 차트 100곡 가져오기 + Spotify 이미지 포함
     """
     URL = 'http://ws.audioscrobbler.com/2.0/'
 
@@ -46,285 +116,61 @@ async def getTop100(background_tasks: BackgroundTasks):
         'limit': 100
     }
 
-    response = requests.get(URL, params=params)
-
-    if response.status_code == 200:
+    try:
+        # 1. Last.fm 차트 데이터 가져오기
+        response = requests.get(URL, params=params, timeout=10)
+        
+        if response.status_code != 200:
+            return {"error": f"Status code: {response.status_code}, Message: {response.text}"}
+        
         data = response.json()
         tracks = data['tracks']['track']
         track_list = []
         
-        # Last.fm 데이터로 기본 구성 (빠른 응답)
+        print(f"Last.fm 차트 {len(tracks)}곡 가져오기 완료, Spotify 이미지 검색 시작...")
+        
+        # 2. 각 트랙에 대해 Spotify 이미지 가져오기
         for i, track in enumerate(tracks, start=1):
-            # Last.fm의 작은 이미지 추출
-            small_image = next(
-                (img.get('#text') for img in track.get('image', []) if img.get('size') == 'small'),
-                None
-            )
+            track_name = track.get('name')
+            artist_name = track.get('artist', {}).get('name')
+            
+            # Spotify 이미지 가져오기 (무조건 Spotify만 사용)
+            spotify_image = None
+            if track_name and artist_name:
+                spotify_image = get_spotify_image(track_name, artist_name)
+                if spotify_image:
+                    print(f"✓ {i}/100 - {track_name} (Spotify 이미지 찾음)")
+                else:
+                    print(f"✗ {i}/100 - {track_name} (Spotify 이미지 없음)")
             
             track_info = {
                 'rank': i,
-                'title': track.get('name'),
+                'title': track_name,
                 'playcount': track.get('playcount'),
                 'listeners': track.get('listeners'),
                 'mbid': track.get('mbid'),
                 'url': track.get('url'),
                 'artist': {
-                    'name': track.get('artist', {}).get('name'),
+                    'name': artist_name,
                     'mbid': track.get('artist', {}).get('mbid'),
                     'url': track.get('artist', {}).get('url')
                 },
-                'image_small': small_image,
-                'spotify_image_loaded': False  # Spotify 이미지 로딩 상태
+                'image_small': spotify_image,
+                'image_source': 'spotify' if spotify_image else None
             }
             track_list.append(track_info)
         
-        # 차트 데이터 캐시에 저장
-        chart_cache["data"] = track_list
-        chart_cache["last_updated"] = datetime.now()
+        print(f"차트 데이터 처리 완료: {len(track_list)}곡")
         
-        # 백그라운드에서 Spotify 이미지 업데이트 시작
-        background_tasks.add_task(update_spotify_images_background, track_list)
-            
         return {
             "tracks": track_list,
-            "spotify_loading": True,
-            "total_count": len(track_list)
+            "total_count": len(track_list),
+            "timestamp": datetime.now().isoformat()
         }
-    else:
-        return {"error": f"Status code: {response.status_code}, Message: {response.text}"}
-
-@router.get("/spotify-images")
-async def get_spotify_images():
-    """
-    Spotify 이미지 업데이트 상태 확인 및 업데이트된 데이터 반환
-    """
-    if chart_cache["data"] is None:
-        return {"error": "No chart data available"}
-    
-    # 업데이트된 이미지가 있는 트랙들만 반환
-    updated_tracks = []
-    for track in chart_cache["data"]:
-        if track.get("spotify_image_loaded", False):
-            updated_tracks.append({
-                "rank": track["rank"],
-                "image_small": track["image_small"],
-                "spotify_image_loaded": True
-            })
-    
-    return {
-        "updated_tracks": updated_tracks,
-        "completed": len(updated_tracks) == len(chart_cache["data"])
-    }
-
-@router.post("/update-single-image")
-async def update_single_spotify_image(track_name: str, artist_name: str, rank: int):
-    """
-    개별 트랙의 Spotify 이미지 업데이트
-    """
-    try:
-        access_token = get_spotify_token()
-        spotify_image = await get_spotify_image_async(access_token, track_name, artist_name)
         
-        if spotify_image and chart_cache["data"]:
-            # 캐시 업데이트
-            for track in chart_cache["data"]:
-                if track["rank"] == rank:
-                    track["image_small"] = spotify_image
-                    track["spotify_image_loaded"] = True
-                    break
-        
-        return {
-            "rank": rank,
-            "image_url": spotify_image,
-            "success": spotify_image is not None
-        }
     except Exception as e:
-        return {"error": str(e), "rank": rank, "success": False}
-
-async def update_spotify_images_background(track_list: List[dict]):
-    """
-    백그라운드에서 실행되는 Spotify 이미지 업데이트
-    """
-    try:
-        access_token = get_spotify_token()
-        
-        # 배치 단위로 처리 (20개씩)
-        batch_size = 20
-        for i in range(0, len(track_list), batch_size):
-            batch = track_list[i:i + batch_size]
-            
-            async with aiohttp.ClientSession() as session:
-                tasks = []
-                for track in batch:
-                    task = update_track_spotify_image(
-                        session, 
-                        access_token,
-                        track
-                    )
-                    tasks.append(task)
-                
-                # 배치 단위로 병렬 실행
-                await asyncio.gather(*tasks, return_exceptions=True)
-                
-                # 배치 처리 후 잠깐 대기 (API 레이트 리밋 방지)
-                await asyncio.sleep(0.1)
-                
-    except Exception as e:
-        print(f"Background Spotify image update failed: {str(e)}")
-
-async def update_track_spotify_image(session: aiohttp.ClientSession, access_token: str, track_info: dict):
-    """
-    개별 트랙의 Spotify 이미지 업데이트
-    """
-    track_name = track_info.get('title')
-    artist_name = track_info.get('artist', {}).get('name')
-    
-    if not track_name or not artist_name:
-        return
-    
-    # 캐시 키 생성
-    cache_key = f"{track_name}_{artist_name}".lower()
-    
-    # 캐시에서 먼저 확인
-    if cache_key in image_cache:
-        if image_cache[cache_key]:
-            track_info['image_small'] = image_cache[cache_key]
-            track_info['spotify_image_loaded'] = True
-        return
-    
-    try:
-        search_url = 'https://api.spotify.com/v1/search'
-        headers = {
-            'Authorization': f'Bearer {access_token}'
-        }
-        
-        query = f'track:"{track_name}" artist:"{artist_name}"'
-        params = {
-            'q': query,
-            'type': 'track',
-            'limit': 1,
-        }
-        
-        async with session.get(search_url, headers=headers, params=params) as response:
-            if response.status == 200:
-                data = await response.json()
-                tracks = data.get('tracks', {}).get('items', [])
-                
-                if tracks:
-                    track = tracks[0]
-                    album_images = track.get('album', {}).get('images', [])
-                    
-                    if album_images:
-                        image_url = None
-                        for img in album_images:
-                            if img.get('height') == 300:  # medium size
-                                image_url = img.get('url')
-                                break
-                        
-                        if not image_url:
-                            image_url = album_images[0].get('url')
-                        
-                        # 캐시에 저장
-                        image_cache[cache_key] = image_url
-                        track_info['image_small'] = image_url
-                        track_info['spotify_image_loaded'] = True
-                        return
-            
-            # 실패한 경우 캐시에 None 저장
-            image_cache[cache_key] = None
-                        
-    except Exception as e:
-        print(f"Error fetching Spotify image for {track_name}: {str(e)}")
-        image_cache[cache_key] = None
-
-async def get_spotify_image_async(access_token: str, track_name: str, artist_name: str) -> Optional[str]:
-    """
-    단일 Spotify 이미지 비동기 조회
-    """
-    if not track_name or not artist_name:
-        return None
-    
-    cache_key = f"{track_name}_{artist_name}".lower()
-    
-    if cache_key in image_cache:
-        return image_cache[cache_key]
-    
-    try:
-        async with aiohttp.ClientSession() as session:
-            search_url = 'https://api.spotify.com/v1/search'
-            headers = {
-                'Authorization': f'Bearer {access_token}'
-            }
-            
-            query = f'track:"{track_name}" artist:"{artist_name}"'
-            params = {
-                'q': query,
-                'type': 'track',
-                'limit': 1,
-            }
-            
-            async with session.get(search_url, headers=headers, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    tracks = data.get('tracks', {}).get('items', [])
-                    
-                    if tracks:
-                        track = tracks[0]
-                        album_images = track.get('album', {}).get('images', [])
-                        
-                        if album_images:
-                            image_url = None
-                            for img in album_images:
-                                if img.get('height') == 300:
-                                    image_url = img.get('url')
-                                    break
-                            
-                            if not image_url:
-                                image_url = album_images[0].get('url')
-                            
-                            image_cache[cache_key] = image_url
-                            return image_url
-                
-                image_cache[cache_key] = None
-                return None
-                            
-    except Exception as e:
-        print(f"Error fetching Spotify image: {str(e)}")
-        image_cache[cache_key] = None
-        return None
-
-def get_spotify_token():
-    global token_info
-
-    CLIENT_ID = config.SpotifyAPIKEY
-    CLIENT_SECRET = config.SpotifySecretKey
-
-    if (token_info["access_token"] is None or 
-        token_info["expires_at"] is None or 
-        datetime.now() >= token_info["expires_at"] - timedelta(minutes=10)):
-        
-        auth_bytes = f"{CLIENT_ID}:{CLIENT_SECRET}".encode('ascii')
-        auth_base64 = base64.b64encode(auth_bytes).decode('ascii')
-        
-        auth_url = 'https://accounts.spotify.com/api/token'
-        headers = {
-            'Authorization': f'Basic {auth_base64}',
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-        data = {'grant_type': 'client_credentials'}
-        
-        response = requests.post(auth_url, headers=headers, data=data)
-        
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, 
-                                detail=f"Failed to get Spotify token: {response.text}")
-        
-        token_data = response.json()
-        token_info["access_token"] = token_data["access_token"]
-        expires_in = token_data.get("expires_in", 3600)
-        token_info["expires_at"] = datetime.now() + timedelta(seconds=expires_in)
-    
-    return token_info["access_token"]
+        print(f"Error in getTop100: {str(e)}")
+        return {"error": f"Failed to fetch chart data: {str(e)}"}
 
 @router.post("/searchPage")
 async def search_result(query: str):
@@ -365,10 +211,23 @@ async def search_result(query: str):
             }
             albums.append(album_summary)
 
-        # 트랙 처리
+        # 트랙 처리 (앨범 이미지 추가)
         raw_tracks = data.get('tracks', {}).get('items', [])
         tracks = []
         for track in raw_tracks:
+            # 트랙의 앨범 이미지 가져오기
+            album_images = track.get('album', {}).get('images', [])
+            track_image = None
+            if album_images:
+                # 중간 크기 이미지 우선 선택 (300x300)
+                for img in album_images:
+                    if img.get('height') == 300:
+                        track_image = img.get('url')
+                        break
+                # 중간 크기가 없으면 첫 번째 이미지 사용
+                if not track_image:
+                    track_image = album_images[0].get('url')
+            
             track_summary = {
                 'id': track.get('id'),
                 'name': track.get('name'),
@@ -376,6 +235,7 @@ async def search_result(query: str):
                 'album': track.get('album', {}).get('name'),
                 'duration_ms': track.get('duration_ms'),
                 'preview_url': track.get('preview_url'),
+                'image': track_image,  # 앨범 이미지 추가
                 'url': track.get('external_urls', {}).get('spotify')
             }
             tracks.append(track_summary)

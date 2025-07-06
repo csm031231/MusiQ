@@ -22,9 +22,9 @@ const Search = () => {
     }
 
     try {
-      console.log(`localhost 서버 POST (Query Params)로 검색 중: ${query}`);
+      console.log(`서버 POST 검색 중: ${query}`);
       
-      const response = await axios.post(`http://localhost:8000/api/searchPage?query=${encodeURIComponent(query.trim())}`, null, {
+      const response = await axios.post(`http://54.180.116.4:8000/api/searchPage?query=${encodeURIComponent(query.trim())}`, null, {
         timeout: 10000,
         headers: { 
           'Content-Type': 'application/json',
@@ -32,7 +32,7 @@ const Search = () => {
         }
       });
       
-      console.log('localhost 서버 POST 검색 성공:', response.data);
+      console.log('서버 POST 검색 성공:', response.data);
       return response.data;
       
     } catch (error) {
@@ -216,7 +216,11 @@ const Search = () => {
                   {filteredResults.tracks.map(track => (
                     <div key={track.id} className="result-item track-item">
                       <div className="result-image small">
-                        <Music size={24} />
+                        {track.image ? (
+                          <img src={track.image} alt={track.name} />
+                        ) : (
+                          <Music size={24} />
+                        )}
                       </div>
                       <div className="result-info">
                         <p className="result-title">{track.name}</p>
