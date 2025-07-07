@@ -5,7 +5,7 @@ from core.dependencies import create_jwt, verify_jwt
 from core.models import User
 from User.dto import (
     UserCreate, UserResponse, UserUpdate, PasswordChange, 
-    Token, FavoriteArtist, FavoriteArtistAdd
+    Token, FavoriteArtist, FavoriteArtistAdd, UserLogin
 )
 from User.crud import (
     get_user_by_id, get_user_by_username, get_user_by_email,
@@ -13,7 +13,7 @@ from User.crud import (
     get_favorite_artists, add_favorite_artist, remove_favorite_artist, check_favorite_artist
 )
 from typing import List
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 
 router = APIRouter(
     prefix="/users",
@@ -64,23 +64,23 @@ async def register_user(user_data: UserCreate, db: AsyncSession = Depends(provid
     # 사용자 생성
     return await create_user(db, user_data)
 
-# 로그인
+# 로그인 - 이메일로 변경
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(provide_session)):
-    # 사용자 조회
-    user = await get_user_by_username(db, form_data.username)
+async def login(user_data: UserLogin, db: AsyncSession = Depends(provide_session)):
+    # 이메일로 사용자 조회
+    user = await get_user_by_email(db, user_data.email)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     # 비밀번호 확인
-    if not verify_password(form_data.password, user.hashed_password):
+    if not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -192,3 +192,22 @@ async def remove_from_favorite_artists(
         raise HTTPException(status_code=404, detail="Artist not in favorites")
     
     return {"message": "Artist removed from favorites"}
+
+# User/user_router.py에 추가할 코드 (기존 코드 마지막에 추가)
+
+# 사용자의 좋아요 아티스트 ID 목록만 반환 (가벼운 API)
+@router.get("/favorite-artists", response_model=List[str])
+async def get_user_favorite_artist_ids_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(provide_session)
+):
+    """사용자의 좋아요 아티스트 ID 목록 조회"""
+    try:
+        from Artist.crud import get_user_favorite_artist_ids
+        favorite_artist_ids = await get_user_favorite_artist_ids(db, current_user.id)
+        return favorite_artist_ids
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get favorite artist IDs: {str(e)}"
+        )

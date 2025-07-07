@@ -40,6 +40,50 @@ async def get_artist_info_from_spotify(artist_id: str) -> Dict[str, Any]:
     
     return response.json()
 
+async def get_popular_artists_from_spotify(limit: int = 20) -> List[Dict[str, Any]]:
+    """Spotify API에서 인기 아티스트 가져오기"""
+    access_token = get_spotify_access_token()
+    headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+    
+    # 인기 K-Pop 및 Pop 아티스트들을 검색하여 인기도가 높은 순으로 정렬
+    popular_queries = [
+        "BTS", "NewJeans", "IVE", "SEVENTEEN", "TWICE", "aespa", "IU", "BLACKPINK",
+        "ITZY", "Red Velvet", "ENHYPEN", "LE SSERAFIM", "(G)I-DLE", "NMIXX",
+        "Taylor Swift", "Ed Sheeran", "Billie Eilish", "Ariana Grande", "Drake",
+        "The Weeknd", "Dua Lipa", "Justin Bieber", "Olivia Rodrigo", "Bad Bunny"
+    ]
+    
+    all_artists = []
+    seen_artists = set()  # 중복 제거를 위한 set
+    
+    for query in popular_queries:
+        try:
+            params = {
+                "q": query,
+                "type": "artist",
+                "limit": 1
+            }
+            response = requests.get("https://api.spotify.com/v1/search", headers=headers, params=params)
+            
+            if response.status_code == 200:
+                artists_data = response.json()["artists"]["items"]
+                for artist in artists_data:
+                    # 중복 제거
+                    if artist["id"] not in seen_artists:
+                        all_artists.append(artist)
+                        seen_artists.add(artist["id"])
+        except Exception as e:
+            print(f"Failed to search {query}: {str(e)}")
+            continue
+    
+    # 인기도 순으로 정렬
+    all_artists.sort(key=lambda x: x.get("popularity", 0), reverse=True)
+    
+    # 요청된 limit만큼 반환
+    return all_artists[:limit]
+
 async def check_artist_favorite(db: AsyncSession, user_id: int, artist_id: str) -> bool:
     """아티스트 좋아요 여부 확인 함수"""
     result = await db.execute(
@@ -100,5 +144,3 @@ async def get_user_favorite_artist_ids(db: AsyncSession, user_id: int) -> List[s
         select(user_favorite_artist.c.artist_id).where(user_favorite_artist.c.user_id == user_id)
     )
     return [row[0] for row in result.all()]
-
-

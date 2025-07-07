@@ -1,11 +1,13 @@
-// src/pages/SignUp.jsx
+// src/pages/SignUp.jsx (닉네임 필드 포함)
 import React, { useState } from 'react';
-import { UserPlus, User, Mail, Lock, Eye, EyeOff, Check } from 'lucide-react';
+import { UserPlus, User, Mail, Lock, Eye, EyeOff, Check, AtSign } from 'lucide-react';
+import axios from 'axios';
 import '../styles/SignUp.css';
 
 const SignUp = ({ setActiveModal }) => {
   const [formData, setFormData] = useState({
     username: '',
+    nickname: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -15,6 +17,9 @@ const SignUp = ({ setActiveModal }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // API 기본 URL 설정
+  const API_BASE_URL = (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL) || 'http://54.180.116.4:8000';
   
   // 폼 입력 핸들러
   const handleChange = (e) => {
@@ -52,8 +57,62 @@ const SignUp = ({ setActiveModal }) => {
   
   const passwordStrength = getPasswordStrength(formData.password);
   
+  // 에러 메시지 처리 함수
+  const getErrorMessage = (error) => {
+    console.log('전체 에러 객체:', error);
+    console.log('에러 코드:', error.code);
+    console.log('에러 메시지:', error.message);
+    console.log('에러 응답:', error.response);
+    
+    // 네트워크 연결 오류
+    if (error.code === 'ERR_NETWORK') {
+      return 'API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.';
+    }
+    
+    // 연결 거부 오류
+    if (error.code === 'ECONNREFUSED') {
+      return '서버 연결이 거부되었습니다. 서버 주소와 포트를 확인해주세요.';
+    }
+    
+    // 타임아웃 오류
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      return '요청 시간이 초과되었습니다. 네트워크 상태를 확인해주세요.';
+    }
+    
+    // CORS 오류
+    if (error.message?.includes('CORS')) {
+      return 'CORS 정책으로 인해 요청이 차단되었습니다. 서버 설정을 확인해주세요.';
+    }
+    
+    // HTTP 상태 코드별 처리
+    if (error.response) {
+      const status = error.response.status;
+      const detail = error.response.data?.detail;
+      
+      switch (status) {
+        case 400:
+          if (detail?.includes('Email already registered')) {
+            return { field: 'email', message: '이미 가입된 이메일입니다.' };
+          }
+          if (detail?.includes('Username already taken')) {
+            return { field: 'username', message: '이미 사용 중인 사용자 이름입니다.' };
+          }
+          return detail || '잘못된 요청입니다.';
+        case 422:
+          return '입력 데이터가 올바르지 않습니다. 다시 확인해주세요.';
+        case 500:
+          return '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+        default:
+          return detail || `서버 오류가 발생했습니다. (상태 코드: ${status})`;
+      }
+    }
+    
+    // 기타 오류
+    return '알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+  };
+  
   // 폼 제출 핸들러
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     // 유효성 검사
@@ -64,6 +123,9 @@ const SignUp = ({ setActiveModal }) => {
     } else if (formData.username.length < 2) {
       newErrors.username = '사용자 이름은 2자 이상이어야 합니다';
     }
+    
+    // nickname이 비어있으면 username을 기본값으로 사용
+    const nickname = formData.nickname.trim() || formData.username.trim();
     
     if (!formData.email.trim()) {
       newErrors.email = '이메일을 입력해주세요';
@@ -93,13 +155,71 @@ const SignUp = ({ setActiveModal }) => {
     }
     
     setIsLoading(true);
+    setErrors({});
     
-    // 테스트용 회원가입 처리
-    setTimeout(() => {
-      console.log('회원가입 완료:', formData);
-      setIsLoading(false);
+    const requestData = {
+      username: formData.username.trim(),
+      email: formData.email.trim(),
+      password: formData.password,
+      nickname: nickname // nickname이 비어있으면 username 사용
+    };
+    
+    console.log('회원가입 요청 시작...');
+    console.log('요청 URL:', `${API_BASE_URL}/users/register`);
+    console.log('요청 데이터:', { ...requestData, password: '[HIDDEN]' });
+    
+    try {
+      // Axios 설정
+      const axiosConfig = {
+        timeout: 15000, // 15초 타임아웃
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        // CORS 관련 설정
+        withCredentials: false,
+      };
+      
+      const response = await axios.post(
+        `${API_BASE_URL}/users/register`,
+        requestData,
+        axiosConfig
+      );
+      
+      console.log('회원가입 성공:', response.data);
+      
+      // 성공 시 로그인 모달로 전환
       setActiveModal('login');
-    }, 1500);
+      alert('회원가입이 완료되었습니다! 로그인해주세요.');
+      
+    } catch (error) {
+      console.error('회원가입 실패:', error);
+      
+      const errorResult = getErrorMessage(error);
+      
+      if (typeof errorResult === 'object' && errorResult.field) {
+        // 특정 필드 에러
+        setErrors({ [errorResult.field]: errorResult.message });
+      } else {
+        // 일반 에러
+        setErrors({ general: errorResult });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // 연결 테스트 함수
+  const testConnection = async () => {
+    try {
+      console.log('서버 연결 테스트 중...');
+      const response = await axios.get(`${API_BASE_URL}/docs`, { timeout: 5000 });
+      console.log('연결 테스트 성공:', response.status);
+      alert('서버 연결 성공!');
+    } catch (error) {
+      console.error('연결 테스트 실패:', error);
+      alert(`서버 연결 실패: ${getErrorMessage(error)}`);
+    }
   };
   
   return (
@@ -113,7 +233,53 @@ const SignUp = ({ setActiveModal }) => {
           <p className="signup-subtitle">새로운 음악 여행을 시작해보세요</p>
         </div>
         
+        {/* 개발용 디버그 정보 */}
+        {(typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') && (
+          <div style={{
+            background: '#f3f4f6',
+            padding: '12px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            fontSize: '0.875rem',
+            color: '#4b5563'
+          }}>
+            <div>API URL: {API_BASE_URL}</div>
+            <button 
+              type="button" 
+              onClick={testConnection}
+              style={{
+                marginTop: '8px',
+                padding: '4px 8px',
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                cursor: 'pointer'
+              }}
+            >
+              연결 테스트
+            </button>
+          </div>
+        )}
+        
         <form className="signup-form" onSubmit={handleSubmit}>
+          {/* 일반 에러 메시지 */}
+          {errors.general && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#dc2626',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              fontSize: '0.875rem',
+              wordBreak: 'break-word'
+            }}>
+              {errors.general}
+            </div>
+          )}
+          
           <div className="input-group">
             <div className="input-wrapper">
               <User className="input-icon" size={20} />
@@ -121,13 +287,29 @@ const SignUp = ({ setActiveModal }) => {
                 type="text"
                 name="username"
                 className={`signup-input ${errors.username ? 'error' : ''}`}
-                placeholder="사용자 이름"
+                placeholder="사용자 이름 (로그인 ID)"
                 value={formData.username}
                 onChange={handleChange}
                 disabled={isLoading}
               />
             </div>
             {errors.username && <span className="error-text">{errors.username}</span>}
+          </div>
+          
+          <div className="input-group">
+            <div className="input-wrapper">
+              <AtSign className="input-icon" size={20} />
+              <input
+                type="text"
+                name="nickname"
+                className={`signup-input ${errors.nickname ? 'error' : ''}`}
+                placeholder="닉네임 (선택사항)"
+                value={formData.nickname}
+                onChange={handleChange}
+                disabled={isLoading}
+              />
+            </div>
+            {errors.nickname && <span className="error-text">{errors.nickname}</span>}
           </div>
           
           <div className="input-group">

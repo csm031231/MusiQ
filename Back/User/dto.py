@@ -9,6 +9,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    # nickname을 선택사항으로 변경하고, 기본값을 username으로 설정하도록 백엔드에서 처리
     nickname: Optional[str] = None
 
 class UserUpdate(BaseModel):
@@ -29,9 +30,9 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
-# 로그인 스키마
+# 로그인 스키마 - 이메일로 변경
 class UserLogin(BaseModel):
-    username: str
+    email: EmailStr  # username에서 email로 변경
     password: str
 
 class Token(BaseModel):

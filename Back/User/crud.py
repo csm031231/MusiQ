@@ -35,11 +35,15 @@ async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
 async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     """사용자 생성 함수"""
     hashed_password = hash_password(user_data.password)
+    
+    # nickname이 없으면 username을 기본값으로 사용
+    nickname = user_data.nickname if user_data.nickname else user_data.username
+    
     new_user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=hashed_password,
-        nickname=user_data.nickname
+        nickname=nickname
     )
     db.add(new_user)
     await db.commit()
@@ -106,4 +110,3 @@ async def check_favorite_artist(db: AsyncSession, user_id: int, artist_id: str) 
         )
     )
     return result.first() is not None
-
