@@ -144,17 +144,11 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     }
   };
   
-  // 기본 메뉴 항목
+  // 기본 메뉴 항목 - 순서 변경 및 추천 플레이리스트 제거
   const menuItems = [
     { to: '/', icon: <Home size={20} />, label: '홈' },
-    { to: '/playlists', icon: <Music size={20} />, label: '추천 플레이리스트' },
     { to: '/chart', icon: <BarChart2 size={20} />, label: '인기차트' },
     { to: '/artist', icon: <Radio size={20} />, label: '아티스트' },
-  ];
-
-  // 로그인한 사용자를 위한 기타 메뉴 항목
-  const otherUserItems = [
-    { to: '/liked-songs', icon: <ThumbsUp size={20} />, label: '좋아요 표시한 음악' },
     { 
       action: (e) => {
         handleFileUpload();
@@ -164,21 +158,60 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       label: '음악 파일 업로드' 
     },
   ];
+
+  // 로그인한 사용자를 위한 기타 메뉴 항목 - 좋아요 표시한 음악만
+  const otherUserItems = [
+    { to: '/liked-songs', icon: <ThumbsUp size={20} />, label: '좋아요 표시한 음악' },
+  ];
   
   return (
     <>
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <nav className="sidebar-nav">
           <ul className="nav-menu">
-            {menuItems.map((item) => (
-              <li key={item.to} className="nav-item">
+            {menuItems.map((item, index) => (
+              <li key={item.to || index} className="nav-item">
+                {item.to ? (
+                  <NavLink 
+                    to={item.to} 
+                    className={({ isActive }) => 
+                      isActive ? 'nav-link active' : 'nav-link'
+                    }
+                    onClick={() => {
+                      console.log('메뉴 항목 클릭: ' + item.label);
+                      closeSidebar();
+                    }}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </NavLink>
+                ) : (
+                  <button 
+                    className="nav-link" 
+                    onClick={(e) => {
+                      console.log('버튼 클릭: ' + item.label);
+                      item.action(e);
+                    }}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          
+          {/* 기타 메뉴 항목 - 좋아요 표시한 음악 */}
+          <ul className="nav-menu">
+            {otherUserItems.map((item, index) => (
+              <li key={index} className="nav-item">
                 <NavLink 
                   to={item.to} 
                   className={({ isActive }) => 
                     isActive ? 'nav-link active' : 'nav-link'
                   }
                   onClick={() => {
-                    console.log('메뉴 항목 클릭: ' + item.label);
+                    console.log('라이브러리 항목 클릭: ' + item.label);
                     closeSidebar();
                   }}
                 >
@@ -192,7 +225,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
           {/* 라이브러리 섹션 */}
           <h3 className="nav-section-title">
             <div className="section-header">
-              <span>라이브러리</span>
+              <span>플레이리스트</span>
             </div>
           </h3>
           
@@ -240,40 +273,6 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
               ))}
             </ul>
           )}
-          
-          {/* 기타 메뉴 항목 */}
-          <ul className="nav-menu">
-            {otherUserItems.map((item, index) => (
-              <li key={index} className="nav-item">
-                {item.to ? (
-                  <NavLink 
-                    to={item.to} 
-                    className={({ isActive }) => 
-                      isActive ? 'nav-link active' : 'nav-link'
-                    }
-                    onClick={() => {
-                      console.log('라이브러리 항목 클릭: ' + item.label);
-                      closeSidebar();
-                    }}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </NavLink>
-                ) : (
-                  <button 
-                    className="nav-link" 
-                    onClick={(e) => {
-                      console.log('버튼 클릭: ' + item.label);
-                      item.action(e);
-                    }}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
           
           <hr className="nav-divider" />      
         </nav>

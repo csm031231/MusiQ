@@ -1,5 +1,4 @@
 /* src/styles/Header.css */
-
 .header {
   display: flex;
   justify-content: space-between;
@@ -187,4 +186,54 @@
   cursor: pointer;
   padding: var(--spacing-xs);
   margin-right: var(--spacing-sm);
+}
+
+/* 마이페이지 JWT 토큰 관련 스타일 추가 */
+.dropdown-item.jwt-required {
+  position: relative;
+}
+
+.dropdown-item.jwt-required::after {
+  content: '🔐';
+  position: absolute;
+  right: var(--spacing-md);
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .header {
+    padding: 0 var(--spacing-md);
+  }
+  
+  .header-mid {
+    max-width: 300px;
+    margin: 0 var(--spacing-md);
+  }
+  
+  .profile-name {
+    display: none; /* 모바일에서는 이름 숨기기 */
+  }
+  
+  .app-title {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-mid {
+    max-width: 200px;
+    margin: 0 var(--spacing-sm);
+  }
+  
+  .header-search-input {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    padding-right: 35px;
+  }
+  
+  .header-search-button {
+    right: 6px;
+  }
 }

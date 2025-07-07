@@ -1,9 +1,127 @@
 // src/pages/MyPage.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { User, Music, Heart, History, Settings, LogOut, Plus, X } from 'lucide-react';
+import { User, Settings, LogOut, X, Save, AlertCircle, CheckCircle, Mail, Lock } from 'lucide-react';
+import axios from 'axios';
 
-// 모달 오버레이
+// API 설정 - Login.jsx와 동일하게 설정
+const API_BASE_URL = (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL) || 'http://54.180.116.4:8000';
+
+// Axios 인스턴스 생성
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+  withCredentials: false,
+});
+
+// 요청 인터셉터 (토큰 자동 추가)
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken'); // Login.jsx와 동일한 키 사용
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// API 서비스
+const apiService = {
+  // 이메일 기반 로그인
+  login: async (email, password) => {
+    try {
+      const response = await api.post('/users/login', {
+        email: email,
+        password: password
+      });
+      
+      // 토큰 저장 (Login.jsx와 동일한 방식)
+      const { access_token } = response.data;
+      localStorage.setItem('accessToken', access_token);
+      
+      // 사용자 정보 가져오기
+      const userResponse = await api.get('/users/me', {
+        headers: {
+          'Authorization': `Bearer ${access_token}`
+        }
+      });
+      
+      // 사용자 정보 저장 (Login.jsx와 동일한 방식)
+      localStorage.setItem('userInfo', JSON.stringify(userResponse.data));
+      localStorage.setItem('userToken', access_token); // 기존 호환성을 위해
+      localStorage.setItem('access_token', access_token); // Header.jsx 호환성을 위해
+      
+      // 로그인 상태 변경 이벤트 발생
+      window.dispatchEvent(new Event('login-status-change'));
+      
+      return { success: true, data: { token: access_token, user: userResponse.data } };
+    } catch (error) {
+      console.error('로그인 실패:', error);
+      return { success: false, error: error.response?.data?.detail || '로그인 실패' };
+    }
+  },
+
+  // 사용자 정보 조회
+  getMyInfo: async () => {
+    try {
+      const response = await api.get('/users/me');
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('사용자 정보 조회 실패:', error);
+      return { success: false, error: error.response?.data?.detail || '사용자 정보 조회 실패' };
+    }
+  },
+
+  // 사용자 정보 수정
+  updateMyInfo: async (userData) => {
+    try {
+      const response = await api.put('/users/me', userData);
+      
+      // 업데이트된 사용자 정보를 localStorage에도 저장
+      localStorage.setItem('userInfo', JSON.stringify(response.data));
+      
+      // 로그인 상태 변경 이벤트 발생 (헤더 업데이트를 위해)
+      window.dispatchEvent(new Event('login-status-change'));
+      
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('정보 수정 실패:', error);
+      return { success: false, error: error.response?.data?.detail || '정보 수정 실패' };
+    }
+  },
+
+  // 비밀번호 변경
+  changePassword: async (currentPassword, newPassword) => {
+    try {
+      const response = await api.put('/users/me/password', {
+        current_password: currentPassword,
+        new_password: newPassword
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('비밀번호 변경 실패:', error);
+      return { success: false, error: error.response?.data?.detail || '비밀번호 변경 실패' };
+    }
+  },
+
+  // 관심 아티스트 목록 조회
+  getFavoriteArtists: async () => {
+    try {
+      const response = await api.get('/users/me/favorite-artists');
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('관심 아티스트 조회 실패:', error);
+      return { success: false, error: error.response?.data?.detail || '관심 아티스트 조회 실패' };
+    }
+  }
+};
+
+// 스타일 컴포넌트들
 const ModalOverlay = styled.div`
   position: fixed;
   top: 0;
@@ -18,7 +136,6 @@ const ModalOverlay = styled.div`
   padding: 2rem;
 `;
 
-// 모달 컨테이너 - 카드 크기로 제한
 const ModalContainer = styled.div`
   width: 100%;
   max-width: 1100px;
@@ -32,13 +149,12 @@ const ModalContainer = styled.div`
   flex-direction: column;
 `;
 
-// 모달 헤더
 const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem 2rem;
-  background: linear-gradient(135deg, #6c63ff 0%, #5a54d6 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 `;
 
@@ -62,7 +178,6 @@ const CloseButton = styled.button`
   }
 `;
 
-// 메인 컨텐츠 영역
 const MainContent = styled.div`
   display: flex;
   height: 620px;
@@ -71,7 +186,7 @@ const MainContent = styled.div`
 
 const Sidebar = styled.div`
   width: 280px;
-  background: linear-gradient(180deg, #6c63ff 0%, #5a54d6 100%);
+  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
   padding: 1.5rem 0;
   overflow-y: auto;
   flex-shrink: 0;
@@ -85,7 +200,7 @@ const TabButton = styled.button`
   padding: 1rem 2rem;
   background: none;
   border: none;
-  color: ${props => props.active ? '#fff' : 'rgba(255,255,255,0.7)'};
+  color: ${props => props.$isActive ? '#fff' : 'rgba(255,255,255,0.7)'};
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
@@ -98,7 +213,7 @@ const TabButton = styled.button`
     background: rgba(255,255,255,0.1);
   }
   
-  ${props => props.active && `
+  ${props => props.$isActive && `
     background: rgba(255,255,255,0.15);
     &::before {
       content: '';
@@ -120,7 +235,6 @@ const ContentArea = styled.div`
   height: 620px;
 `;
 
-// 공통 컨텐츠 컨테이너
 const ContentWrapper = styled.div`
   height: 530px;
   display: flex;
@@ -136,6 +250,7 @@ const SectionContainer = styled.div`
   height: 530px;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
   
   &::before {
     content: '';
@@ -144,21 +259,9 @@ const SectionContainer = styled.div`
     left: 6px;
     right: 6px;
     bottom: 6px;
-    background: linear-gradient(135deg, rgba(108,99,255,0.12) 0%, rgba(90,84,214,0.12) 100%);
+    background: linear-gradient(135deg, rgba(102,126,234,0.12) 0%, rgba(118,75,162,0.12) 100%);
     border-radius: 16px;
     z-index: -1;
-  }
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    background: linear-gradient(135deg, rgba(108,99,255,0.06) 0%, rgba(90,84,214,0.06) 100%);
-    border-radius: 16px;
-    z-index: -2;
   }
 `;
 
@@ -180,21 +283,9 @@ const ProfileHeader = styled.div`
     left: 6px;
     right: 6px;
     bottom: 6px;
-    background: linear-gradient(135deg, rgba(108,99,255,0.12) 0%, rgba(90,84,214,0.12) 100%);
+    background: linear-gradient(135deg, rgba(102,126,234,0.12) 0%, rgba(118,75,162,0.12) 100%);
     border-radius: 16px;
     z-index: -1;
-  }
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    background: linear-gradient(135deg, rgba(108,99,255,0.06) 0%, rgba(90,84,214,0.06) 100%);
-    border-radius: 16px;
-    z-index: -2;
   }
 `;
 
@@ -202,14 +293,14 @@ const ProfileAvatar = styled.div`
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6c63ff 0%, #5a54d6 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-size: 2.2rem;
   font-weight: 700;
-  box-shadow: 0 8px 20px rgba(108,99,255,0.3);
+  box-shadow: 0 8px 20px rgba(102,126,234,0.3);
   border: 3px solid white;
 `;
 
@@ -258,7 +349,7 @@ const StatCard = styled.div`
     left: 3px;
     right: 3px;
     bottom: 3px;
-    background: linear-gradient(135deg, rgba(108,99,255,0.06) 0%, rgba(90,84,214,0.06) 100%);
+    background: linear-gradient(135deg, rgba(102,126,234,0.06) 0%, rgba(118,75,162,0.06) 100%);
     border-radius: 12px;
     z-index: -1;
   }
@@ -271,7 +362,7 @@ const StatCard = styled.div`
 const StatValue = styled.h4`
   font-size: 2rem;
   font-weight: 700;
-  color: #6c63ff;
+  color: #667eea;
   margin-bottom: 0.5rem;
 `;
 
@@ -281,14 +372,17 @@ const StatLabel = styled.p`
   font-weight: 500;
 `;
 
-const LogoutButton = styled.button`
+const ActionButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+  background: ${props => props.$variant === 'danger' ? 
+    'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 
+    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+  };
   color: white;
   border: none;
   border-radius: 10px;
@@ -296,94 +390,22 @@ const LogoutButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  margin-top: auto;
+  margin-top: ${props => props.$variant === 'danger' ? 'auto' : '0'};
+  margin-bottom: 1rem;
   
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(255,107,107,0.3);
+    box-shadow: 0 6px 16px ${props => props.$variant === 'danger' ? 
+      'rgba(239,68,68,0.3)' : 'rgba(102,126,234,0.3)'
+    };
   }
-`;
-
-const CreatePlaylistButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 1.2rem;
-  background: linear-gradient(135deg, #6c63ff 0%, #5a54d6 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: 2rem;
-  transition: all 0.3s ease;
   
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(108,99,255,0.3);
+  &:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
-`;
-
-const ContentGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.2rem;
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 0.5rem;
-`;
-
-const ItemCard = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-  padding: 1rem;
-  background: #f8f9ff;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: 1px solid rgba(108,99,255,0.1);
-  
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    background: white;
-  }
-`;
-
-const ItemThumbnail = styled.div`
-  width: 45px;
-  height: 45px;
-  background: linear-gradient(135deg, #6c63ff 0%, #5a54d6 100%);
-  border-radius: 8px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-`;
-
-const ItemDetails = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const ItemTitle = styled.h5`
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 0.25rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const ItemSubtitle = styled.p`
-  font-size: 0.8rem;
-  color: #666;
 `;
 
 const SectionTitle = styled.h4`
@@ -393,306 +415,424 @@ const SectionTitle = styled.h4`
   margin-bottom: 1.5rem;
 `;
 
-const EmptyState = styled.div`
-  text-align: center;
-  padding: 2rem;
-  color: #666;
+const FormGroup = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const Label = styled.label`
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #333;
   font-size: 1rem;
 `;
 
-const SettingsGroup = styled.div`
-  background: #f8f9ff;
-  padding: 1.5rem;
-  border-radius: 12px;
-  margin-bottom: 1rem;
-  border: 1px solid rgba(108,99,255,0.1);
-`;
-
-const SettingsGroupTitle = styled.h5`
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 1rem;
-`;
-
-const SettingsItem = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  
-  &:last-child {
-    margin-bottom: 0;
-  }
-`;
-
-const SettingsLabel = styled.label`
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #333;
-`;
-
-const SettingsInput = styled.input`
-  width: 60%;
-  padding: 0.6rem;
+const Input = styled.input`
+  width: 100%;
+  padding: 0.75rem;
   border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 1rem;
   transition: border-color 0.3s ease;
   
   &:focus {
     outline: none;
-    border-color: #6c63ff;
+    border-color: #667eea;
   }
 `;
 
-const SaveButton = styled.button`
-  padding: 0.6rem 1rem;
-  background: linear-gradient(135deg, #6c63ff 0%, #5a54d6 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
+const StatusMessage = styled.div`
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  background: ${props => props.$messageType === 'success' ? '#f0f9f0' : '#fef2f2'};
+  border: 1px solid ${props => props.$messageType === 'success' ? '#22c55e' : '#ef4444'};
+  color: ${props => props.$messageType === 'success' ? '#16a34a' : '#dc2626'};
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+`;
+
+const LoginForm = styled.div`
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 2rem 0;
+`;
+
+const LoginTitle = styled.h3`
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 2rem;
+`;
+
+const TestInfo = styled.div`
+  background: #f0f9ff;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(102,126,234,0.2);
+  margin-top: 1rem;
   font-size: 0.9rem;
-  transition: all 0.3s ease;
-  
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(108,99,255,0.3);
-  }
-`;
-
-const ToggleSwitch = styled.label`
-  position: relative;
-  display: inline-block;
-  width: 48px;
-  height: 24px;
-`;
-
-const ToggleInput = styled.input`
-  opacity: 0;
-  width: 0;
-  height: 0;
-`;
-
-const ToggleSlider = styled.span`
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  border-radius: 24px;
-  transition: 0.4s;
-  
-  &:before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    border-radius: 50%;
-    transition: 0.4s;
-  }
-  
-  ${ToggleInput}:checked + & {
-    background-color: #6c63ff;
-  }
-  
-  ${ToggleInput}:checked + &:before {
-    transform: translateX(24px);
-  }
+  color: #666;
 `;
 
 const MyPage = ({ setActiveModal }) => {
   const [activeTab, setActiveTab] = useState('profile');
+  const [userInfo, setUserInfo] = useState(null);
+  const [favoriteArtists, setFavoriteArtists] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   
-  const userInfo = {
-    username: '음악사랑',
-    email: 'music_lover@example.com',
-    joinDate: '2023년 5월',
-    profileImage: null
-  };
+  // 로그인 폼 상태
+  const [loginForm, setLoginForm] = useState({
+    email: '222@example.com',  // 기본값
+    password: '22222222'       // 기본값
+  });
   
-  const myPlaylists = [
-    { id: 1, title: '내가 만든 플레이리스트 #1', tracks: 12 },
-    { id: 2, title: '출근길 음악', tracks: 8 },
-    { id: 3, title: '운동할 때 듣는 음악', tracks: 15 },
-    { id: 4, title: '감성 발라드 모음', tracks: 20 },
-    { id: 5, title: '신나는 댄스 음악', tracks: 18 }
-  ];
+  // 수정 폼 상태
+  const [editForm, setEditForm] = useState({
+    username: '',
+    email: '',
+    nickname: ''
+  });
   
-  const likedSongs = [
-    { id: 1, title: '눈이 오는 날엔', artist: '이무진' },
-    { id: 2, title: '밤편지', artist: '아이유' },
-    { id: 3, title: 'Dynamite', artist: '방탄소년단' },
-    { id: 4, title: 'Celebrity', artist: '아이유' },
-    { id: 5, title: '라일락', artist: '아이유' },
-    { id: 6, title: 'Permission to Dance', artist: '방탄소년단' }
-  ];
-  
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: ''
+  });
+
   const tabs = [
     { id: 'profile', name: '프로필', icon: <User size={20} /> },
-    { id: 'playlists', name: '내 플레이리스트', icon: <Music size={20} /> },
-    { id: 'liked', name: '좋아요한 음악', icon: <Heart size={20} /> },
-    { id: 'history', name: '최근 들은 음악', icon: <History size={20} /> },
     { id: 'settings', name: '설정', icon: <Settings size={20} /> }
   ];
-  
-  const handleTabChange = (tabId) => {
-    setActiveTab(tabId);
+
+  // 메시지 표시 함수
+  const showMessage = (text, type = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('userToken');
-    localStorage.removeItem('userInfo');
-    window.dispatchEvent(new Event('login-status-change'));
-    setActiveModal(null);
+  // 초기화 - Login.jsx 패턴을 따라 토큰 확인
+  useEffect(() => {
+    // Login.jsx와 동일한 방식으로 토큰 확인
+    const token = localStorage.getItem('accessToken');
+    const userToken = localStorage.getItem('userToken'); // 기존 호환성
+    const access_token = localStorage.getItem('access_token'); // Header 호환성
+    
+    if (token || userToken || access_token) {
+      setIsLoggedIn(true);
+      
+      // 저장된 사용자 정보가 있으면 사용
+      const storedUserInfo = localStorage.getItem('userInfo');
+      if (storedUserInfo) {
+        try {
+          const parsedUserInfo = JSON.parse(storedUserInfo);
+          setUserInfo(parsedUserInfo);
+          setEditForm({
+            username: parsedUserInfo.username || '',
+            email: parsedUserInfo.email || '',
+            nickname: parsedUserInfo.nickname || ''
+          });
+        } catch (error) {
+          console.error('사용자 정보 파싱 오류:', error);
+        }
+      }
+      
+      // API에서 최신 정보 가져오기
+      if (token || access_token) {
+        loadUserInfo();
+        loadFavoriteArtists();
+      }
+    }
+  }, []);
+
+  // 로그인 처리 - Login.jsx와 동일한 패턴
+  const handleLogin = async () => {
+    if (!loginForm.email || !loginForm.password) {
+      showMessage('이메일과 비밀번호를 입력하세요.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const loginResult = await apiService.login(loginForm.email, loginForm.password);
+      if (loginResult.success) {
+        setIsLoggedIn(true);
+        setUserInfo(loginResult.data.user);
+        setEditForm({
+          username: loginResult.data.user.username || '',
+          email: loginResult.data.user.email || '',
+          nickname: loginResult.data.user.nickname || ''
+        });
+        showMessage('로그인 성공!', 'success');
+        
+        await loadFavoriteArtists();
+      } else {
+        showMessage('로그인 실패: ' + loginResult.error, 'error');
+      }
+    } catch (error) {
+      showMessage('로그인 오류: ' + error.message, 'error');
+    }
+    setLoading(false);
+  };
+
+  // 사용자 정보 로드
+  const loadUserInfo = async () => {
+    const result = await apiService.getMyInfo();
+    if (result.success) {
+      setUserInfo(result.data);
+      setEditForm({
+        username: result.data.username || '',
+        email: result.data.email || '',
+        nickname: result.data.nickname || ''
+      });
+      
+      // localStorage에도 저장 (Login.jsx 패턴)
+      localStorage.setItem('userInfo', JSON.stringify(result.data));
+    } else {
+      showMessage('사용자 정보 로드 실패: ' + result.error, 'error');
+    }
+  };
+
+  // 관심 아티스트 로드
+  const loadFavoriteArtists = async () => {
+    const result = await apiService.getFavoriteArtists();
+    if (result.success) {
+      setFavoriteArtists(result.data);
+    }
+  };
+
+  // 사용자 정보 수정
+  const handleUpdateProfile = async () => {
+    setLoading(true);
+    try {
+      const updateData = {};
+      if (editForm.username !== userInfo.username) updateData.username = editForm.username;
+      if (editForm.email !== userInfo.email) updateData.email = editForm.email;
+      if (editForm.nickname !== userInfo.nickname) updateData.nickname = editForm.nickname;
+
+      if (Object.keys(updateData).length === 0) {
+        showMessage('변경된 정보가 없습니다.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      const result = await apiService.updateMyInfo(updateData);
+      if (result.success) {
+        setUserInfo(result.data);
+        showMessage('프로필이 성공적으로 업데이트되었습니다!', 'success');
+      } else {
+        showMessage('프로필 업데이트 실패: ' + result.error, 'error');
+      }
+    } catch (error) {
+      showMessage('프로필 업데이트 오류: ' + error.message, 'error');
+    }
+    setLoading(false);
+  };
+
+  // 비밀번호 변경
+  const handleChangePassword = async () => {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      showMessage('현재 비밀번호와 새 비밀번호를 모두 입력하세요.', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await apiService.changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      if (result.success) {
+        showMessage('비밀번호가 성공적으로 변경되었습니다!', 'success');
+        setPasswordForm({ currentPassword: '', newPassword: '' });
+      } else {
+        showMessage('비밀번호 변경 실패: ' + result.error, 'error');
+      }
+    } catch (error) {
+      showMessage('비밀번호 변경 오류: ' + error.message, 'error');
+    }
+    setLoading(false);
+  };
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
   };
 
   const handleClose = () => {
     setActiveModal(null);
   };
-  
+
+  // 로그아웃 처리 - Login.jsx 패턴을 반대로
+  const handleLogout = () => {
+    // 모든 토큰과 사용자 정보 삭제
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('userInfo');
+    
+    setIsLoggedIn(false);
+    setUserInfo(null);
+    setFavoriteArtists([]);
+    
+    // 로그인 상태 변경 이벤트 발생
+    window.dispatchEvent(new Event('login-status-change'));
+    
+    showMessage('로그아웃되었습니다.', 'success');
+  };
+
   const renderTabContent = () => {
+    // 로그인 폼 표시
+    if (!isLoggedIn) {
+      return (
+        <SectionContainer>
+          <LoginForm>
+            <LoginTitle>로그인</LoginTitle>
+            <FormGroup>
+              <Label>이메일:</Label>
+              <Input 
+                type="email" 
+                value={loginForm.email}
+                onChange={(e) => setLoginForm(prev => ({...prev, email: e.target.value}))}
+                placeholder="이메일 입력"
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>비밀번호:</Label>
+              <Input 
+                type="password" 
+                value={loginForm.password}
+                onChange={(e) => setLoginForm(prev => ({...prev, password: e.target.value}))}
+                placeholder="비밀번호 입력"
+              />
+            </FormGroup>
+            
+            <ActionButton onClick={handleLogin} disabled={loading}>
+              <Mail size={18} />
+              {loading ? '로그인 중...' : '로그인'}
+            </ActionButton>
+            
+            <TestInfo>
+              💡 <strong>테스트 계정 정보:</strong><br/>
+              이메일: 222@example.com<br/>
+              비밀번호: 22222222<br/>
+              API URL: {API_BASE_URL}
+            </TestInfo>
+          </LoginForm>
+        </SectionContainer>
+      );
+    }
+
     switch(activeTab) {
       case 'profile':
         return (
           <ContentWrapper>
             <ProfileHeader>
               <ProfileAvatar>
-                {userInfo.profileImage ? (
-                  <img src={userInfo.profileImage} alt="프로필" />
-                ) : (
-                  <User size={48} />
-                )}
+                <User size={48} />
               </ProfileAvatar>
               <ProfileDetails>
-                <ProfileName>{userInfo.username}</ProfileName>
-                <ProfileEmail>{userInfo.email}</ProfileEmail>
-                <ProfileJoinDate>가입일: {userInfo.joinDate}</ProfileJoinDate>
+                <ProfileName>{userInfo?.username || '로딩 중...'}</ProfileName>
+                <ProfileEmail>{userInfo?.email || '로딩 중...'}</ProfileEmail>
+                <ProfileJoinDate>
+                  가입일: {userInfo?.created_at ? new Date(userInfo.created_at).toLocaleDateString() : '로딩 중...'}
+                </ProfileJoinDate>
               </ProfileDetails>
             </ProfileHeader>
             
             <StatsContainer>
               <StatCard>
-                <StatValue>{myPlaylists.length}</StatValue>
-                <StatLabel>내 플레이리스트</StatLabel>
+                <StatValue>{userInfo?.id || 0}</StatValue>
+                <StatLabel>사용자 ID</StatLabel>
               </StatCard>
               <StatCard>
-                <StatValue>{likedSongs.length}</StatValue>
-                <StatLabel>좋아요한 음악</StatLabel>
+                <StatValue>{favoriteArtists.length}</StatValue>
+                <StatLabel>관심 아티스트</StatLabel>
               </StatCard>
               <StatCard>
-                <StatValue>42</StatValue>
-                <StatLabel>최근 들은 음악</StatLabel>
+                <StatValue>{userInfo?.is_active ? '활성' : '비활성'}</StatValue>
+                <StatLabel>계정 상태</StatLabel>
               </StatCard>
             </StatsContainer>
             
-            <LogoutButton onClick={handleLogout}>
+            <ActionButton $variant="danger" onClick={handleLogout}>
               <LogOut size={16} />
               로그아웃
-            </LogoutButton>
+            </ActionButton>
           </ContentWrapper>
-        );
-      
-      case 'playlists':
-        return (
-          <SectionContainer>
-            <CreatePlaylistButton>
-              <Plus size={18} />
-              새 플레이리스트 만들기
-            </CreatePlaylistButton>
-            <SectionTitle>내 플레이리스트 ({myPlaylists.length})</SectionTitle>
-            <ContentGrid>
-              {myPlaylists.map(playlist => (
-                <ItemCard key={playlist.id}>
-                  <ItemThumbnail>
-                    <Music size={20} />
-                  </ItemThumbnail>
-                  <ItemDetails>
-                    <ItemTitle>{playlist.title}</ItemTitle>
-                    <ItemSubtitle>{playlist.tracks}곡</ItemSubtitle>
-                  </ItemDetails>
-                </ItemCard>
-              ))}
-            </ContentGrid>
-          </SectionContainer>
-        );
-      
-      case 'liked':
-        return (
-          <SectionContainer>
-            <SectionTitle>좋아요한 음악 ({likedSongs.length})</SectionTitle>
-            <ContentGrid>
-              {likedSongs.map(song => (
-                <ItemCard key={song.id}>
-                  <ItemThumbnail>
-                    <Heart size={20} />
-                  </ItemThumbnail>
-                  <ItemDetails>
-                    <ItemTitle>{song.title}</ItemTitle>
-                    <ItemSubtitle>{song.artist}</ItemSubtitle>
-                  </ItemDetails>
-                </ItemCard>
-              ))}
-            </ContentGrid>
-          </SectionContainer>
-        );
-      
-      case 'history':
-        return (
-          <SectionContainer>
-            <SectionTitle>최근 들은 음악</SectionTitle>
-            <EmptyState>아직 음악을 들은 기록이 없습니다.</EmptyState>
-          </SectionContainer>
         );
       
       case 'settings':
         return (
           <SectionContainer>
             <SectionTitle>설정</SectionTitle>
-            <SettingsGroup>
-              <SettingsGroupTitle>계정 설정</SettingsGroupTitle>
-              <SettingsItem>
-                <SettingsLabel>사용자 이름</SettingsLabel>
-                <SettingsInput type="text" defaultValue={userInfo.username} />
-              </SettingsItem>
-              <SettingsItem>
-                <SettingsLabel>이메일</SettingsLabel>
-                <SettingsInput type="email" defaultValue={userInfo.email} />
-              </SettingsItem>
-              <SettingsItem>
-                <SaveButton>변경사항 저장</SaveButton>
-              </SettingsItem>
-            </SettingsGroup>
             
-            <SettingsGroup>
-              <SettingsGroupTitle>앱 설정</SettingsGroupTitle>
-              <SettingsItem>
-                <SettingsLabel>다크 모드</SettingsLabel>
-                <ToggleSwitch>
-                  <ToggleInput type="checkbox" />
-                  <ToggleSlider />
-                </ToggleSwitch>
-              </SettingsItem>
-              <SettingsItem>
-                <SettingsLabel>자동 재생</SettingsLabel>
-                <ToggleSwitch>
-                  <ToggleInput type="checkbox" defaultChecked />
-                  <ToggleSlider />
-                </ToggleSwitch>
-              </SettingsItem>
-            </SettingsGroup>
+            <FormGroup>
+              <Label>사용자명:</Label>
+              <Input 
+                type="text" 
+                value={editForm.username}
+                onChange={(e) => setEditForm(prev => ({...prev, username: e.target.value}))}
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>이메일:</Label>
+              <Input 
+                type="email" 
+                value={editForm.email}
+                onChange={(e) => setEditForm(prev => ({...prev, email: e.target.value}))}
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>닉네임:</Label>
+              <Input 
+                type="text" 
+                value={editForm.nickname}
+                onChange={(e) => setEditForm(prev => ({...prev, nickname: e.target.value}))}
+              />
+            </FormGroup>
+            
+            <ActionButton onClick={handleUpdateProfile} disabled={loading}>
+              <Save size={18} />
+              {loading ? '저장 중...' : '프로필 저장'}
+            </ActionButton>
+
+            <hr style={{margin: '2rem 0', border: 'none', borderTop: '1px solid #e0e0e0'}} />
+
+            <SectionTitle style={{fontSize: '1.2rem', marginBottom: '1rem'}}>비밀번호 변경</SectionTitle>
+            
+            <FormGroup>
+              <Label>현재 비밀번호:</Label>
+              <Input 
+                type="password" 
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm(prev => ({...prev, currentPassword: e.target.value}))}
+                placeholder="현재 비밀번호 입력"
+              />
+            </FormGroup>
+            
+            <FormGroup>
+              <Label>새 비밀번호:</Label>
+              <Input 
+                type="password" 
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm(prev => ({...prev, newPassword: e.target.value}))}
+                placeholder="새 비밀번호 입력"
+              />
+            </FormGroup>
+            
+            <ActionButton onClick={handleChangePassword} disabled={loading}>
+              <Lock size={18} />
+              {loading ? '변경 중...' : '비밀번호 변경'}
+            </ActionButton>
           </SectionContainer>
         );
       
       default:
-        return <EmptyState>콘텐츠를 찾을 수 없습니다.</EmptyState>;
+        return <SectionContainer>콘텐츠를 찾을 수 없습니다.</SectionContainer>;
     }
   };
 
@@ -706,12 +846,19 @@ const MyPage = ({ setActiveModal }) => {
           </CloseButton>
         </ModalHeader>
         
+        {message && (
+          <StatusMessage $messageType={message.type}>
+            {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            {message.text}
+          </StatusMessage>
+        )}
+        
         <MainContent>
           <Sidebar>
             {tabs.map(tab => (
               <TabButton
                 key={tab.id}
-                active={activeTab === tab.id}
+                $isActive={activeTab === tab.id}
                 onClick={() => handleTabChange(tab.id)}
               >
                 {tab.icon}

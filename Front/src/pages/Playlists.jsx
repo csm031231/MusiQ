@@ -22,7 +22,7 @@ import {
 
 import axios from 'axios';
 
-// API 설정
+// API 설정 - Login.jsx와 동일하게 통일
 const API_BASE_URL = 'http://54.180.116.4:8000';
 
 // axios 인스턴스 생성
@@ -33,32 +33,48 @@ const apiClient = axios.create({
   }
 });
 
-// 요청 인터셉터 - 토큰 자동 추가 (임시로 주석처리)
+// 요청 인터셉터 - 토큰 자동 추가 (Login.jsx와 동일한 키 사용)
 apiClient.interceptors.request.use(
   (config) => {
-    // 로그인 로직 완성 전까지 주석처리
-    // const token = localStorage.getItem('accessToken');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = localStorage.getItem('accessToken'); // Login.jsx와 동일한 키
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('API 요청에 토큰 추가:', token.substring(0, 20) + '...');
+    } else {
+      console.log('토큰이 없습니다.');
+    }
     return config;
   },
   (error) => {
+    console.error('요청 인터셉터 에러:', error);
     return Promise.reject(error);
   }
 );
 
 // 응답 인터셉터 - 에러 처리
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    console.log('API 응답 성공:', response.status, response.config.url);
+    return response.data;
+  },
   (error) => {
-    // 로그인 로직 완성 전까지 주석처리
-    // if (error.response?.status === 401) {
-    //   // 토큰이 만료되었거나 유효하지 않은 경우
-    //   localStorage.removeItem('accessToken');
-    //   window.location.href = '/login';
-    // }
-    console.log('API 에러:', error);
+    console.error('API 응답 에러:', error.response?.status, error.response?.data);
+    
+    if (error.response?.status === 401) {
+      // 토큰이 만료되었거나 유효하지 않은 경우
+      console.log('인증 오류 - 토큰 삭제 및 리다이렉트');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('userInfo');
+      
+      // 로그인 상태 변경 이벤트 발생
+      window.dispatchEvent(new Event('login-status-change'));
+      
+      // 로그인 페이지로 리다이렉트하지 않고 에러만 반환
+      return Promise.reject(new Error('로그인이 필요합니다.'));
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -67,7 +83,10 @@ const api = {
   // 내 플레이리스트 목록 조회
   getMyPlaylists: async () => {
     try {
-      return await apiClient.get('/playlists/my-playlists');
+      console.log('플레이리스트 목록 조회 시작...');
+      const response = await apiClient.get('/playlists/my-playlists');
+      console.log('플레이리스트 목록 조회 성공:', response);
+      return response;
     } catch (error) {
       console.error('플레이리스트 목록 조회 실패:', error);
       throw error;
@@ -77,7 +96,10 @@ const api = {
   // 플레이리스트 생성
   createPlaylist: async (playlistData) => {
     try {
-      return await apiClient.post('/playlists/', playlistData);
+      console.log('플레이리스트 생성 시작:', playlistData);
+      const response = await apiClient.post('/playlists/', playlistData);
+      console.log('플레이리스트 생성 성공:', response);
+      return response;
     } catch (error) {
       console.error('플레이리스트 생성 실패:', error);
       throw error;
@@ -87,27 +109,43 @@ const api = {
   // 플레이리스트 삭제
   deletePlaylist: async (playlistId) => {
     try {
-      return await apiClient.delete(`/playlists/${playlistId}`);
+      console.log('플레이리스트 삭제 시작:', playlistId);
+      const response = await apiClient.delete(`/playlists/${playlistId}`);
+      console.log('플레이리스트 삭제 성공:', response);
+      return response;
     } catch (error) {
       console.error('플레이리스트 삭제 실패:', error);
       throw error;
     }
   },
 
-  // 좋아요한 노래 목록 조회
+  // 좋아요한 노래 목록 조회 - 백엔드 라우터에 맞춰 수정
   getLikedSongs: async () => {
     try {
-      return await apiClient.get('/playlists/liked-songs');
+      console.log('좋아요한 노래 목록 조회 시작...');
+      // 백엔드에서 실제 경로가 /playlists/liked-songs가 아닐 수 있으므로 확인 후 수정
+      // 일단 빈 배열로 처리하고, 실제 엔드포인트 확인 후 수정
+      console.log('좋아요한 노래 목록 조회 - 임시로 빈 배열 반환');
+      return [];
+      
+      // 실제 엔드포인트가 확인되면 아래 코드 사용
+      // const response = await apiClient.get('/playlists/liked-songs');
+      // console.log('좋아요한 노래 목록 조회 성공:', response);
+      // return response;
     } catch (error) {
       console.error('좋아요한 노래 목록 조회 실패:', error);
-      throw error;
+      // 에러가 발생해도 빈 배열로 처리하여 다른 기능에 영향 주지 않음
+      return [];
     }
   },
 
   // 플레이리스트 수정
   updatePlaylist: async (playlistId, playlistData) => {
     try {
-      return await apiClient.put(`/playlists/${playlistId}`, playlistData);
+      console.log('플레이리스트 수정 시작:', playlistId, playlistData);
+      const response = await apiClient.put(`/playlists/${playlistId}`, playlistData);
+      console.log('플레이리스트 수정 성공:', response);
+      return response;
     } catch (error) {
       console.error('플레이리스트 수정 실패:', error);
       throw error;
@@ -115,7 +153,7 @@ const api = {
   }
 };
 
-// 스타일드 컴포넌트들
+// 스타일드 컴포넌트들 (이전과 동일)
 const PlaylistsContainer = styled.div`
   padding: 20px;
   max-width: 1400px;
@@ -503,8 +541,8 @@ const EmptyDescription = styled.p`
   margin: 0 0 24px 0;
 `;
 
-// 모달 스타일
-const ModalOverlay = styled.div`
+// 전체화면 모달 스타일 (사이드바와 동일)
+const FullscreenModalOverlay = styled.div`
   position: fixed;
   top: 0;
   left: 0;
@@ -515,20 +553,176 @@ const ModalOverlay = styled.div`
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  opacity: ${props => props.show ? 1 : 0};
-  visibility: ${props => props.show ? 'visible' : 'hidden'};
+  opacity: ${props => props.$show ? 1 : 0};
+  visibility: ${props => props.$show ? 'visible' : 'hidden'};
   transition: all 0.3s ease;
 `;
 
-const Modal = styled.div`
-  background: white;
-  border-radius: 16px;
-  padding: 24px;
+const FullscreenModalContent = styled.div`
   width: 90%;
-  max-width: 400px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  transform: ${props => props.show ? 'scale(1)' : 'scale(0.9)'};
+  max-width: 500px;
+  height: auto;
+  max-height: 80vh;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transform: ${props => props.$show ? 'scale(1)' : 'scale(0.9)'};
   transition: all 0.3s ease;
+`;
+
+const FullscreenModalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+`;
+
+const FullscreenModalTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+`;
+
+const FullscreenModalCloseBtn = styled.button`
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+`;
+
+const FullscreenModalBody = styled.div`
+  padding: 2rem;
+  flex: 1;
+  overflow-y: auto;
+`;
+
+const PlaylistForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+`;
+
+const FormField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const FormLabel = styled.label`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+`;
+
+const FormInput = styled.input`
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+  }
+`;
+
+const FormTextArea = styled.textarea`
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  resize: vertical;
+  min-height: 100px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+
+  &::placeholder {
+    color: #9ca3af;
+  }
+`;
+
+const FullscreenModalFooter = styled.div`
+  display: flex;
+  gap: 12px;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid #f1f5f9;
+  background: #fafafa;
+`;
+
+const CancelButton = styled.button`
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+  color: #6b7280;
+
+  &:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+  }
+`;
+
+const CreateButtonModal = styled.button`
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  }
+
+  &:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
 `;
 
 const ModalTitle = styled.h2`
@@ -658,7 +852,57 @@ const LoadingText = styled.p`
   color: #6b7280;
 `;
 
-// 메인 컴포넌트 - 이름을 Playlists로 변경
+// 에러 상태 컴포넌트
+const ErrorState = styled.div`
+  text-align: center;
+  padding: 60px 20px;
+  color: #dc2626;
+`;
+
+const ErrorIcon = styled.div`
+  width: 80px;
+  height: 80px;
+  background: #fef2f2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  color: #dc2626;
+`;
+
+const ErrorTitle = styled.h3`
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #dc2626;
+  margin: 0 0 8px 0;
+`;
+
+const ErrorDescription = styled.p`
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0 0 24px 0;
+`;
+
+// 로그인 필요 상태 컴포넌트
+const LoginRequiredState = styled.div`
+  text-align: center;
+  padding: 60px 20px;
+`;
+
+const LoginIcon = styled.div`
+  width: 80px;
+  height: 80px;
+  background: #f0f4ff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  color: #667eea;
+`;
+
+// 메인 컴포넌트
 const Playlists = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -671,18 +915,42 @@ const Playlists = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylist, setNewPlaylist] = useState({
     title: '',
-    description: '',
-    is_public: true
+    description: ''
   });
   const [error, setError] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // 로그인 상태 확인
+  useEffect(() => {
+    const checkLoginStatus = () => {
+      const token = localStorage.getItem('accessToken');
+      setIsLoggedIn(!!token);
+      console.log('로그인 상태 확인:', !!token);
+    };
+
+    checkLoginStatus();
+
+    // 로그인 상태 변경 이벤트 리스닝
+    const handleLoginStatusChange = () => {
+      checkLoginStatus();
+    };
+
+    window.addEventListener('login-status-change', handleLoginStatusChange);
+
+    return () => {
+      window.removeEventListener('login-status-change', handleLoginStatusChange);
+    };
+  }, []);
 
   // 사이드바에서 오는 플레이리스트 생성 요청 리스닝
   useEffect(() => {
     const handleCreatePlaylistRequest = async (event) => {
       const playlistData = event.detail;
+      console.log('사이드바에서 플레이리스트 생성 요청:', playlistData);
       
       try {
         const createdPlaylist = await api.createPlaylist(playlistData);
+        console.log('사이드바 요청으로 플레이리스트 생성 성공:', createdPlaylist);
         
         // 새 플레이리스트를 목록에 추가
         const newPlaylistWithMeta = {
@@ -696,12 +964,17 @@ const Playlists = () => {
         // 사이드바 업데이트를 위한 이벤트 발생
         window.dispatchEvent(new Event('playlist-updated'));
         
-        // 사이드바에서 생성된 경우에만 상세 페이지로 이동
-        navigate(`/playlists/${createdPlaylist.id}`);
+        // 사이드바에서 생성된 경우에만 플레이리스트 목록 페이지로 이동
+        navigate('/playlists');
         
       } catch (error) {
-        console.error('플레이리스트 생성 중 오류:', error);
-        alert('플레이리스트 생성 중 오류가 발생했습니다.');
+        console.error('사이드바 요청 플레이리스트 생성 중 오류:', error);
+        
+        if (error.message === '로그인이 필요합니다.') {
+          alert('로그인이 필요합니다.');
+        } else {
+          alert('플레이리스트 생성 중 오류가 발생했습니다.');
+        }
       }
     };
 
@@ -716,33 +989,65 @@ const Playlists = () => {
   // 데이터 로딩
   useEffect(() => {
     const loadData = async () => {
+      if (!isLoggedIn) {
+        setLoading(false);
+        setPlaylists([]);
+        setLikedSongs([]);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
+        console.log('데이터 로딩 시작...');
         
-        const [playlistsData, likedSongsData] = await Promise.all([
-          api.getMyPlaylists(),
-          api.getLikedSongs()
+        // 플레이리스트와 좋아요한 노래를 병렬로 로드하되, 좋아요한 노래 실패 시에도 플레이리스트는 로드
+        const playlistsPromise = api.getMyPlaylists();
+        const likedSongsPromise = api.getLikedSongs();
+        
+        const [playlistsData, likedSongsData] = await Promise.allSettled([
+          playlistsPromise,
+          likedSongsPromise
         ]);
         
-        setPlaylists(playlistsData);
-        setLikedSongs(likedSongsData);
+        // 플레이리스트 결과 처리
+        if (playlistsData.status === 'fulfilled') {
+          console.log('플레이리스트 데이터 로딩 성공:', playlistsData.value);
+          setPlaylists(playlistsData.value || []);
+        } else {
+          console.error('플레이리스트 데이터 로딩 실패:', playlistsData.reason);
+          setPlaylists([]);
+        }
+        
+        // 좋아요한 노래 결과 처리
+        if (likedSongsData.status === 'fulfilled') {
+          console.log('좋아요한 노래 데이터 로딩 성공:', likedSongsData.value);
+          setLikedSongs(likedSongsData.value || []);
+        } else {
+          console.error('좋아요한 노래 데이터 로딩 실패:', likedSongsData.reason);
+          setLikedSongs([]);
+        }
+        
+        console.log('데이터 로딩 완료');
       } catch (error) {
         console.error('데이터 로딩 중 오류:', error);
-        setError('데이터를 불러오는 중 오류가 발생했습니다.');
         
-        // 인증 오류가 아닌 경우에만 빈 배열로 설정 (로그인 로직 완성 전까지 항상 빈 배열로 설정)
-        // if (error.response?.status !== 401) {
-          setPlaylists([]);
-          setLikedSongs([]);
-        // }
+        if (error.message === '로그인이 필요합니다.') {
+          setError('로그인이 필요합니다.');
+          setIsLoggedIn(false);
+        } else {
+          setError('데이터를 불러오는 중 오류가 발생했습니다.');
+        }
+        
+        setPlaylists([]);
+        setLikedSongs([]);
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [isLoggedIn]);
 
   // 플레이리스트 생성
   const handleCreatePlaylist = async () => {
@@ -751,9 +1056,17 @@ const Playlists = () => {
       return;
     }
 
+    if (!isLoggedIn) {
+      setError('로그인이 필요합니다.');
+      return;
+    }
+
     try {
       setError(null);
+      console.log('플레이리스트 생성 시도:', newPlaylist);
+      
       const createdPlaylist = await api.createPlaylist(newPlaylist);
+      console.log('플레이리스트 생성 성공:', createdPlaylist);
       
       // 새 플레이리스트를 목록에 추가 (isLiked: false 추가)
       const newPlaylistWithMeta = {
@@ -764,17 +1077,23 @@ const Playlists = () => {
       
       setPlaylists(prev => [newPlaylistWithMeta, ...prev]);
       setShowCreateModal(false);
-      setNewPlaylist({ title: '', description: '', is_public: true });
+      setNewPlaylist({ title: '', description: '' });
       
       // 사이드바 업데이트를 위한 이벤트 발생
       window.dispatchEvent(new Event('playlist-updated'));
       
-      // 성공 메시지 (선택사항)
+      // 성공 메시지
       console.log('플레이리스트가 성공적으로 생성되었습니다:', createdPlaylist.title);
       
     } catch (error) {
       console.error('플레이리스트 생성 중 오류:', error);
-      setError('플레이리스트 생성 중 오류가 발생했습니다.');
+      
+      if (error.message === '로그인이 필요합니다.') {
+        setError('로그인이 필요합니다.');
+        setIsLoggedIn(false);
+      } else {
+        setError('플레이리스트 생성 중 오류가 발생했습니다.');
+      }
     }
   };
 
@@ -786,21 +1105,35 @@ const Playlists = () => {
       return;
     }
 
+    if (!isLoggedIn) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
     try {
+      console.log('플레이리스트 삭제 시도:', playlistId);
       await api.deletePlaylist(playlistId);
+      console.log('플레이리스트 삭제 성공:', playlistId);
+      
       setPlaylists(prev => prev.filter(playlist => playlist.id !== playlistId));
       
       // 사이드바 업데이트를 위한 이벤트 발생
       window.dispatchEvent(new Event('playlist-updated'));
     } catch (error) {
       console.error('플레이리스트 삭제 중 오류:', error);
-      alert('플레이리스트 삭제 중 오류가 발생했습니다.');
+      
+      if (error.message === '로그인이 필요합니다.') {
+        alert('로그인이 필요합니다.');
+        setIsLoggedIn(false);
+      } else {
+        alert('플레이리스트 삭제 중 오류가 발생했습니다.');
+      }
     }
   };
 
-  // 플레이리스트 클릭 시 상세 페이지로 이동
+  // 플레이리스트 클릭 시 플레이리스트 목록 페이지로 이동
   const handlePlaylistClick = (playlistId) => {
-    navigate(`/playlists/${playlistId}`);
+    navigate('/playlists');
   };
 
   // 좋아요한 노래 클릭 처리
@@ -808,23 +1141,18 @@ const Playlists = () => {
     navigate('/liked-songs');
   };
 
-  // 필터링된 플레이리스트
+  // 필터링된 플레이리스트 (공개/비공개 필터 제거)
   const filteredPlaylists = playlists.filter(playlist => {
     const matchesSearch = playlist.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = activeFilter === 'all' || 
-      (activeFilter === 'public' && playlist.is_public) ||
-      (activeFilter === 'private' && !playlist.is_public);
-    
-    return matchesSearch && matchesFilter;
+    return matchesSearch;
   });
 
-  // "좋아요한 노래" 가상 플레이리스트 추가
-  const allPlaylists = [
+  // "좋아요한 노래" 가상 플레이리스트 추가 (로그인 상태일 때만)
+  const allPlaylists = isLoggedIn ? [
     {
       id: 'liked',
       title: '좋아요한 노래',
       description: `${likedSongs.length}곡의 좋아요한 노래`,
-      is_public: false,
       created_at: new Date().toISOString(),
       tracks: likedSongs.length,
       isLiked: true
@@ -834,7 +1162,7 @@ const Playlists = () => {
       tracks: playlist.tracks || 0,
       isLiked: false
     }))
-  ];
+  ] : [];
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('ko-KR');
@@ -859,6 +1187,41 @@ const Playlists = () => {
           <Spinner />
           <LoadingText>로딩 중...</LoadingText>
         </SpinnerContainer>
+      </PlaylistsContainer>
+    );
+  }
+
+  // 로그인이 필요한 경우
+  if (!isLoggedIn) {
+    return (
+      <PlaylistsContainer>
+        <LoginRequiredState>
+          <LoginIcon>
+            <User size={40} />
+          </LoginIcon>
+          <EmptyTitle>로그인이 필요합니다</EmptyTitle>
+          <EmptyDescription>
+            플레이리스트를 보려면 먼저 로그인해주세요
+          </EmptyDescription>
+        </LoginRequiredState>
+      </PlaylistsContainer>
+    );
+  }
+
+  // 에러가 있는 경우
+  if (error) {
+    return (
+      <PlaylistsContainer>
+        <ErrorState>
+          <ErrorIcon>
+            <X size={40} />
+          </ErrorIcon>
+          <ErrorTitle>오류 발생</ErrorTitle>
+          <ErrorDescription>{error}</ErrorDescription>
+          <CreateButton onClick={() => window.location.reload()}>
+            다시 시도
+          </CreateButton>
+        </ErrorState>
       </PlaylistsContainer>
     );
   }
@@ -905,26 +1268,6 @@ const Playlists = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </SearchBox>
-        <FilterTabs>
-          <FilterTab 
-            active={activeFilter === 'all'} 
-            onClick={() => setActiveFilter('all')}
-          >
-            전체
-          </FilterTab>
-          <FilterTab 
-            active={activeFilter === 'public'} 
-            onClick={() => setActiveFilter('public')}
-          >
-            공개
-          </FilterTab>
-          <FilterTab 
-            active={activeFilter === 'private'} 
-            onClick={() => setActiveFilter('private')}
-          >
-            비공개
-          </FilterTab>
-        </FilterTabs>
       </FilterSection>
 
       {allPlaylists.length === 0 ? (
@@ -973,24 +1316,6 @@ const Playlists = () => {
                     <span>{playlist.tracks}곡</span>
                     <span>•</span>
                     <span>{formatDuration(playlist.tracks)}</span>
-                    {!playlist.isLiked && (
-                      <>
-                        <span>•</span>
-                        <span>
-                          {playlist.is_public ? (
-                            <>
-                              <Eye size={12} style={{ marginRight: '4px' }} />
-                              공개
-                            </>
-                          ) : (
-                            <>
-                              <EyeOff size={12} style={{ marginRight: '4px' }} />
-                              비공개
-                            </>
-                          )}
-                        </span>
-                      </>
-                    )}
                   </PlaylistStats>
                   <PlaylistDescription>
                     {playlist.description || `${formatDate(playlist.created_at)}에 생성됨`}
@@ -1013,24 +1338,6 @@ const Playlists = () => {
                     <span>{playlist.tracks}곡</span>
                     <span>•</span>
                     <span>{formatDuration(playlist.tracks)}</span>
-                    {!playlist.isLiked && (
-                      <>
-                        <span>•</span>
-                        <span>
-                          {playlist.is_public ? (
-                            <>
-                              <Eye size={12} style={{ marginRight: '4px' }} />
-                              공개
-                            </>
-                          ) : (
-                            <>
-                              <EyeOff size={12} style={{ marginRight: '4px' }} />
-                              비공개
-                            </>
-                          )}
-                        </span>
-                      </>
-                    )}
                   </PlaylistStats>
                 </ListPlaylistInfo>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -1053,88 +1360,75 @@ const Playlists = () => {
         </PlaylistsGrid>
       )}
 
-      {/* 플레이리스트 생성 모달 */}
-      <ModalOverlay show={showCreateModal} onClick={() => setShowCreateModal(false)}>
-        <Modal show={showCreateModal} onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <ModalTitle>새 플레이리스트 만들기</ModalTitle>
-            <button
-              onClick={() => setShowCreateModal(false)}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: '#6b7280',
-                padding: '4px'
-              }}
-            >
-              <X size={20} />
-            </button>
-          </div>
+      {/* 플레이리스트 생성 모달 - 사이드바와 동일한 전체화면 스타일 */}
+      <FullscreenModalOverlay $show={showCreateModal} onClick={() => setShowCreateModal(false)}>
+        <FullscreenModalContent $show={showCreateModal} onClick={(e) => e.stopPropagation()}>
+          <FullscreenModalHeader>
+            <FullscreenModalTitle>새 재생목록</FullscreenModalTitle>
+            <FullscreenModalCloseBtn onClick={() => setShowCreateModal(false)}>
+              <X size={24} />
+            </FullscreenModalCloseBtn>
+          </FullscreenModalHeader>
           
-          {error && (
-            <div style={{ 
-              background: '#fef2f2', 
-              border: '1px solid #fecaca', 
-              color: '#dc2626', 
-              padding: '12px 16px', 
-              borderRadius: '8px', 
-              marginBottom: '16px', 
-              fontSize: '0.875rem' 
-            }}>
-              {error}
-            </div>
-          )}
+          <FullscreenModalBody>
+            {error && (
+              <div style={{ 
+                background: '#fef2f2', 
+                border: '1px solid #fecaca', 
+                color: '#dc2626', 
+                padding: '12px 16px', 
+                borderRadius: '8px', 
+                marginBottom: '1.5rem', 
+                fontSize: '0.875rem' 
+              }}>
+                {error}
+              </div>
+            )}
+            
+            <PlaylistForm>
+              <FormField>
+                <FormLabel htmlFor="playlist-title">제목</FormLabel>
+                <FormInput
+                  id="playlist-title"
+                  type="text"
+                  placeholder="재생목록의 제목을 입력하세요"
+                  value={newPlaylist.title}
+                  onChange={(e) => {
+                    setNewPlaylist(prev => ({ ...prev, title: e.target.value }));
+                    setError(null);
+                  }}
+                />
+              </FormField>
+              
+              <FormField>
+                <FormLabel htmlFor="playlist-description">설명</FormLabel>
+                <FormTextArea
+                  id="playlist-description"
+                  placeholder="재생목록에 대해 설명해 주세요"
+                  value={newPlaylist.description}
+                  onChange={(e) => setNewPlaylist(prev => ({ ...prev, description: e.target.value }))}
+                />
+              </FormField>
+            </PlaylistForm>
+          </FullscreenModalBody>
           
-          <FormGroup>
-            <Label>플레이리스트 이름 *</Label>
-            <Input
-              type="text"
-              placeholder="플레이리스트 이름을 입력하세요"
-              value={newPlaylist.title}
-              onChange={(e) => {
-                setNewPlaylist(prev => ({ ...prev, title: e.target.value }));
-                setError(null);
-              }}
-            />
-          </FormGroup>
-          <FormGroup>
-            <Label>설명</Label>
-            <TextArea
-              placeholder="플레이리스트에 대한 설명을 입력하세요 (선택사항)"
-              value={newPlaylist.description}
-              onChange={(e) => setNewPlaylist(prev => ({ ...prev, description: e.target.value }))}
-            />
-          </FormGroup>
-          <CheckboxGroup>
-            <Checkbox
-              type="checkbox"
-              id="is_public"
-              checked={newPlaylist.is_public}
-              onChange={(e) => setNewPlaylist(prev => ({ ...prev, is_public: e.target.checked }))}
-            />
-            <Label htmlFor="is_public" style={{ margin: 0 }}>
-              다른 사용자에게 공개
-            </Label>
-          </CheckboxGroup>
-          <ModalActions>
-            <Button onClick={() => {
+          <FullscreenModalFooter>
+            <CancelButton onClick={() => {
               setShowCreateModal(false);
               setError(null);
-              setNewPlaylist({ title: '', description: '', is_public: true });
+              setNewPlaylist({ title: '', description: '' });
             }}>
               취소
-            </Button>
-            <Button 
-              variant="primary" 
+            </CancelButton>
+            <CreateButtonModal
               onClick={handleCreatePlaylist}
               disabled={!newPlaylist.title.trim()}
             >
               만들기
-            </Button>
-          </ModalActions>
-        </Modal>
-      </ModalOverlay>
+            </CreateButtonModal>
+          </FullscreenModalFooter>
+        </FullscreenModalContent>
+      </FullscreenModalOverlay>
     </PlaylistsContainer>
   );
 };

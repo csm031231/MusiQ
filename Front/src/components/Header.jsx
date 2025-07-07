@@ -12,12 +12,15 @@ const Header = ({ toggleSidebar, setActiveModal }) => {
   const [userInfo, setUserInfo] = useState(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   
-  // 로그인 상태 확인 함수
+  // 로그인 상태 확인 함수 - Login.jsx 패턴에 맞춤
   const checkLoginStatus = () => {
-    const userToken = localStorage.getItem('userToken');
+    // Login.jsx에서 사용하는 토큰 키들 확인
+    const accessToken = localStorage.getItem('accessToken'); // 주요 토큰
+    const userToken = localStorage.getItem('userToken'); // 기존 호환성
+    const access_token = localStorage.getItem('access_token'); // MyPage 호환성
     const storedUserInfo = localStorage.getItem('userInfo');
     
-    if (userToken) {
+    if (accessToken || userToken || access_token) {
       setIsLoggedIn(true);
       
       if (storedUserInfo) {
@@ -42,7 +45,7 @@ const Header = ({ toggleSidebar, setActiveModal }) => {
   // 스토리지 변경 이벤트를 리스닝
   useEffect(() => {
     const handleStorageChange = (e) => {
-      if (e.key === 'userToken' || e.key === 'userInfo') {
+      if (e.key === 'accessToken' || e.key === 'userToken' || e.key === 'access_token' || e.key === 'userInfo') {
         checkLoginStatus();
       }
     };
@@ -72,10 +75,14 @@ const Header = ({ toggleSidebar, setActiveModal }) => {
     setSearchQuery('');
   };
   
-  // 로그아웃 처리
+  // 로그아웃 처리 - Login.jsx 패턴에 맞춤
   const handleLogout = () => {
+    // 모든 토큰 삭제 (Login.jsx와 동일)
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('userToken');
+    localStorage.removeItem('access_token');
     localStorage.removeItem('userInfo');
+    
     setIsLoggedIn(false);
     setUserInfo(null);
     setShowProfileMenu(false);
@@ -91,9 +98,21 @@ const Header = ({ toggleSidebar, setActiveModal }) => {
     setShowProfileMenu(!showProfileMenu);
   };
 
-  // 마이페이지 클릭 핸들러
+  // 마이페이지 클릭 핸들러 - 토큰 확인 로직 개선
   const handleMyPageClick = () => {
-    setActiveModal('mypage');
+    // Login.jsx와 동일한 방식으로 토큰 확인
+    const accessToken = localStorage.getItem('accessToken');
+    const userToken = localStorage.getItem('userToken');
+    const access_token = localStorage.getItem('access_token');
+    
+    // 어떤 토큰이든 있으면 마이페이지 열기
+    if (accessToken || userToken || access_token) {
+      setActiveModal('mypage');
+    } else {
+      // 토큰이 없으면 로그인 모달 열기
+      alert('마이페이지를 이용하시려면 로그인해주세요.');
+      setActiveModal('login');
+    }
     setShowProfileMenu(false);
   };
   
