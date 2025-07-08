@@ -363,3 +363,139 @@
     font-size: 0.8rem;
   }
 }
+
+/* Artist.css에 추가할 Spotify 관련 스타일 */
+
+/* 미니 스피너 */
+.mini-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-light);
+  border-top: 2px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  margin-right: var(--spacing-xs);
+}
+
+/* 검색 로딩 상태 */
+.search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+/* 다시 시도 버튼 */
+.retry-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-left: var(--spacing-md);
+  transition: background-color 0.2s ease;
+}
+
+.retry-button:hover {
+  background-color: var(--primary-dark);
+}
+
+/* 에러 메시지 개선 */
+.error-message {
+  background-color: #fee;
+  color: #c53030;
+  padding: var(--spacing-md);
+  border-radius: var(--radius-medium);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid #fecaca;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 인기도 표시 개선 */
+.artist-popularity {
+  font-size: 0.75rem;
+  color: var(--primary-color);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Spotify 로고 색상 적용 */
+.spotify-green {
+  color: #1DB954;
+}
+
+/* 로딩 텍스트 개선 */
+.loading-spinner p {
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  margin-top: var(--spacing-md);
+}
+
+/* 검색 입력 플레이스홀더 개선 */
+.search-input::placeholder {
+  color: #9CA3AF;
+  font-style: italic;
+}
+
+/* 아티스트 카드 호버 효과 개선 */
+.artist-card:hover .artist-name {
+  color: var(--primary-color);
+}
+
+.artist-card:hover .artist-avatar img {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+
+/* 빈 상태 아이콘 색상 */
+.empty-state svg {
+  color: #9CA3AF;
+  margin-bottom: var(--spacing-md);
+}
+
+/* 페이지 타이틀 개선 */
+.page-title {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 섹션 타이틀 개선 */
+.section-title {
+  border-bottom: 2px solid var(--border-light);
+  padding-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+/* 검색 결과 섹션 */
+.search-results {
+  background: var(--surface);
+  border-radius: var(--radius-medium);
+  padding: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+  box-shadow: var(--shadow-light);
+}
+
+/* 반응형 개선 */
+@media (max-width: 640px) {
+  .error-message {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    text-align: center;
+  }
+  
+  .retry-button {
+    margin-left: 0;
+    width: 100%;
+  }
+}

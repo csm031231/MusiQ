@@ -5,6 +5,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from core.models import Artist, ArtistComment, User, user_favorite_artist
 from Artist.dto import ArtistCommentCreate, SpotifyArtistOut
 import requests
+import asyncio
 from Artist.auth import get_spotify_access_token
 
 SPOTIFY_API_URL = "https://api.spotify.com/v1/artists"
@@ -29,60 +30,87 @@ async def save_artist_from_spotify(db: AsyncSession, spotify_data: dict) -> Arti
 
 async def get_artist_info_from_spotify(artist_id: str) -> Dict[str, Any]:
     """Spotify API에서 아티스트 정보 가져오기"""
-    access_token = get_spotify_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-    response = requests.get(f"{SPOTIFY_API_URL}/{artist_id}", headers=headers)
-    
-    if response.status_code != 200:
-        raise Exception(f"Failed to get artist info: {response.status_code}")
-    
-    return response.json()
+    try:
+        access_token = get_spotify_access_token()
+        headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        response = requests.get(f"{SPOTIFY_API_URL}/{artist_id}", headers=headers)
+        
+        if response.status_code != 200:
+            raise Exception(f"Spotify API error: {response.status_code} - {response.text}")
+        
+        return response.json()
+    except Exception as e:
+        print(f"Error getting artist info from Spotify: {str(e)}")
+        raise
 
 async def get_popular_artists_from_spotify(limit: int = 20) -> List[Dict[str, Any]]:
-    """Spotify API에서 인기 아티스트 가져오기"""
-    access_token = get_spotify_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-    
-    # 인기 K-Pop 및 Pop 아티스트들을 검색하여 인기도가 높은 순으로 정렬
-    popular_queries = [
-        "BTS", "NewJeans", "IVE", "SEVENTEEN", "TWICE", "aespa", "IU", "BLACKPINK",
-        "ITZY", "Red Velvet", "ENHYPEN", "LE SSERAFIM", "(G)I-DLE", "NMIXX",
-        "Taylor Swift", "Ed Sheeran", "Billie Eilish", "Ariana Grande", "Drake",
-        "The Weeknd", "Dua Lipa", "Justin Bieber", "Olivia Rodrigo", "Bad Bunny"
-    ]
-    
-    all_artists = []
-    seen_artists = set()  # 중복 제거를 위한 set
-    
-    for query in popular_queries:
-        try:
-            params = {
-                "q": query,
-                "type": "artist",
-                "limit": 1
-            }
-            response = requests.get("https://api.spotify.com/v1/search", headers=headers, params=params)
+    """Spotify API에서 인기 아티스트 가져오기 (개선된 버전)"""
+    try:
+        access_token = get_spotify_access_token()
+        headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        
+        # 더 다양하고 실제로 인기 있는 아티스트들 검색
+        popular_queries = [
+            # K-Pop
+            "BTS", "BLACKPINK", "NewJeans", "IVE", "SEVENTEEN", "TWICE", "aespa", "IU",
+            "ITZY", "Red Velvet", "ENHYPEN", "LE SSERAFIM", "(G)I-DLE", "NMIXX", "STRAY KIDS",
             
-            if response.status_code == 200:
-                artists_data = response.json()["artists"]["items"]
-                for artist in artists_data:
-                    # 중복 제거
-                    if artist["id"] not in seen_artists:
-                        all_artists.append(artist)
-                        seen_artists.add(artist["id"])
-        except Exception as e:
-            print(f"Failed to search {query}: {str(e)}")
-            continue
-    
-    # 인기도 순으로 정렬
-    all_artists.sort(key=lambda x: x.get("popularity", 0), reverse=True)
-    
-    # 요청된 limit만큼 반환
-    return all_artists[:limit]
+            # Global Pop
+            "Taylor Swift", "Ed Sheeran", "Billie Eilish", "Ariana Grande", "The Weeknd",
+            "Dua Lipa", "Justin Bieber", "Olivia Rodrigo", "Harry Styles", "Doja Cat",
+            
+            # Hip-Hop/R&B
+            "Drake", "Bad Bunny", "Post Malone", "Travis Scott", "Kendrick Lamar"
+        ]
+        
+        all_artists = []
+        seen_artists = set()  # 중복 제거를 위한 set
+        
+        # 병렬 처리로 속도 향상
+        semaphore = asyncio.Semaphore(5)  # 동시 요청 수 제한
+        
+        async def fetch_artist(query):
+            async with semaphore:
+                try:
+                    params = {
+                        "q": query,
+                        "type": "artist",
+                        "limit": 1
+                    }
+                    response = requests.get("https://api.spotify.com/v1/search", headers=headers, params=params)
+                    
+                    if response.status_code == 200:
+                        artists_data = response.json()["artists"]["items"]
+                        for artist in artists_data:
+                            # 인기도 점수가 있고 중복이 아닌 경우만 추가
+                            if artist["id"] not in seen_artists and artist.get("popularity", 0) > 0:
+                                all_artists.append(artist)
+                                seen_artists.add(artist["id"])
+                                return True
+                except Exception as e:
+                    print(f"Failed to search {query}: {str(e)}")
+                return False
+        
+        # 비동기 병렬 처리
+        tasks = [fetch_artist(query) for query in popular_queries[:25]]  # 처음 25개만 처리
+        await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 인기도 순으로 정렬
+        all_artists.sort(key=lambda x: x.get("popularity", 0), reverse=True)
+        
+        print(f"Found {len(all_artists)} popular artists")
+        
+        # 요청된 limit만큼 반환
+        return all_artists[:limit]
+        
+    except Exception as e:
+        print(f"Error getting popular artists from Spotify: {str(e)}")
+        # 에러 발생 시 빈 리스트 대신 최소한의 데이터라도 반환
+        return []
 
 async def check_artist_favorite(db: AsyncSession, user_id: int, artist_id: str) -> bool:
     """아티스트 좋아요 여부 확인 함수"""
@@ -121,22 +149,26 @@ async def get_artist_comments(db: AsyncSession, artist_id: str) -> List[Tuple[Ar
 
 async def search_artists_from_spotify(query: str, limit: int = 10) -> List[Dict[str, Any]]:
     """Spotify API로 아티스트 검색 함수"""
-    access_token = get_spotify_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-    params = {
-        "q": query,
-        "type": "artist",
-        "limit": limit
-    }
-    
-    response = requests.get("https://api.spotify.com/v1/search", headers=headers, params=params)
-    
-    if response.status_code != 200:
-        raise Exception(f"Failed to search artists: {response.status_code}")
-    
-    return response.json()["artists"]["items"]
+    try:
+        access_token = get_spotify_access_token()
+        headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        params = {
+            "q": query,
+            "type": "artist",
+            "limit": limit
+        }
+        
+        response = requests.get("https://api.spotify.com/v1/search", headers=headers, params=params)
+        
+        if response.status_code != 200:
+            raise Exception(f"Spotify API error: {response.status_code} - {response.text}")
+        
+        return response.json()["artists"]["items"]
+    except Exception as e:
+        print(f"Error searching artists from Spotify: {str(e)}")
+        raise
 
 async def get_user_favorite_artist_ids(db: AsyncSession, user_id: int) -> List[str]:
     """사용자의 관심 아티스트 ID 목록 조회 함수"""

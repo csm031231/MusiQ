@@ -12,6 +12,7 @@ from Artist.crud import (
     get_popular_artists_from_spotify
 )
 from typing import List, Optional
+import asyncio
 
 router = APIRouter(
     prefix="/artists",
@@ -21,12 +22,13 @@ router = APIRouter(
 # 인기 아티스트 조회 (로그인 불필요)
 @router.get("/popular", response_model=List[SpotifyArtistOut])
 async def get_popular_artists(limit: int = 20):
-    """인기 아티스트 목록 조회"""
+    """Spotify API에서 인기 아티스트 목록 조회"""
     try:
         artists_data = await get_popular_artists_from_spotify(limit)
         artists = [SpotifyArtistOut.from_spotify_response(item) for item in artists_data]
         return artists
     except Exception as e:
+        print(f"Error in get_popular_artists: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get popular artists: {str(e)}"
@@ -55,6 +57,7 @@ async def get_popular_artists_authenticated(
         
         return artists
     except Exception as e:
+        print(f"Error in get_popular_artists_authenticated: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get popular artists: {str(e)}"
@@ -102,6 +105,7 @@ async def toggle_artist_favorite(
             return {"message": "Added to favorites", "is_favorite": True}
             
     except Exception as e:
+        print(f"Error in toggle_artist_favorite: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to toggle favorite: {str(e)}"
@@ -142,6 +146,7 @@ async def get_user_favorite_artists(
         return favorite_artists
         
     except Exception as e:
+        print(f"Error in get_user_favorite_artists: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get favorite artists: {str(e)}"
@@ -171,9 +176,61 @@ async def get_artist_info(
         return SpotifyArtistOut.from_spotify_response(spotify_data, is_favorite)
     
     except Exception as e:
+        print(f"Error in get_artist_info: {str(e)}")
         raise HTTPException(
             status_code=404,
             detail=f"Failed to get artist information: {str(e)}"
+        )
+
+# 아티스트 검색
+@router.get("/search/{query}", response_model=List[SpotifyArtistOut])
+async def search_artists(
+    query: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(provide_session),
+    limit: int = 10
+):
+    try:
+        # Spotify API로 아티스트 검색
+        artists_data = await search_artists_from_spotify(query, limit)
+        
+        # 사용자의 관심 아티스트 목록 가져오기
+        favorite_artist_ids = await get_user_favorite_artist_ids(db, current_user.id)
+        
+        # 검색 결과 가공
+        artists = []
+        for item in artists_data:
+            is_favorite = item["id"] in favorite_artist_ids
+            artists.append(SpotifyArtistOut.from_spotify_response(item, is_favorite))
+        
+        return artists
+    
+    except Exception as e:
+        print(f"Error in search_artists: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to search artists: {str(e)}"
+        )
+    
+# 로그인 없이 접근 가능한 아티스트 검색
+@router.get("/public-search/{query}", response_model=List[SpotifyArtistOut])
+async def public_search_artists(
+    query: str,
+    limit: int = 10
+):
+    try:
+        # Spotify API로 아티스트 검색
+        artists_data = await search_artists_from_spotify(query, limit)
+
+        # 결과 가공 (is_favorite 없이 반환)
+        artists = [SpotifyArtistOut.from_spotify_response(item) for item in artists_data]
+        return artists
+
+    except Exception as e:
+        print(f"Error in public_search_artists: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to search artists: {str(e)}"
         )
 
 # 아티스트에 대한 댓글 생성
@@ -235,52 +292,3 @@ async def get_comments(
         comments.append(comment_dict)
     
     return comments
-
-# 아티스트 검색
-@router.get("/search/{query}", response_model=List[SpotifyArtistOut])
-async def search_artists(
-    query: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(provide_session),
-    limit: int = 10
-):
-    try:
-        # Spotify API로 아티스트 검색
-        artists_data = await search_artists_from_spotify(query, limit)
-        
-        # 사용자의 관심 아티스트 목록 가져오기
-        favorite_artist_ids = await get_user_favorite_artist_ids(db, current_user.id)
-        
-        # 검색 결과 가공
-        artists = []
-        for item in artists_data:
-            is_favorite = item["id"] in favorite_artist_ids
-            artists.append(SpotifyArtistOut.from_spotify_response(item, is_favorite))
-        
-        return artists
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to search artists: {str(e)}"
-        )
-    
-# 로그인 없이 접근 가능한 아티스트 검색
-@router.get("/public-search/{query}", response_model=List[SpotifyArtistOut])
-async def public_search_artists(
-    query: str,
-    limit: int = 10
-):
-    try:
-        # Spotify API로 아티스트 검색
-        artists_data = await search_artists_from_spotify(query, limit)
-
-        # 결과 가공 (is_favorite 없이 반환)
-        artists = [SpotifyArtistOut.from_spotify_response(item) for item in artists_data]
-        return artists
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to search artists: {str(e)}"
-        )
