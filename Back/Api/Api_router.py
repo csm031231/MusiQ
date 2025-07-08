@@ -1,109 +1,22 @@
 import requests
-import json
-import base64
-from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException
+from datetime import datetime
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import get_config
-from typing import List, Optional, Dict
+from core.database import provide_session
+from Api.spotify_service import get_spotify_token, get_spotify_image
+from Api.crud import save_track_to_db
+from Api.dto import ChartResponse, SearchResponse
 
 router = APIRouter(
     prefix="/api",
     tags=["api"]
 )
 
-# 토큰 정보 저장
-token_info = {
-    "access_token": None,
-    "expires_at": None
-}
-
 config = get_config()
 
-def get_spotify_token():
-    """Spotify API 토큰 가져오기"""
-    global token_info
-
-    CLIENT_ID = config.SpotifyAPIKEY
-    CLIENT_SECRET = config.SpotifySecretKey
-
-    # 토큰이 없거나 만료 예정인 경우 새로 발급
-    if (token_info["access_token"] is None or 
-        token_info["expires_at"] is None or 
-        datetime.now() >= token_info["expires_at"] - timedelta(minutes=10)):
-        
-        try:
-            auth_bytes = f"{CLIENT_ID}:{CLIENT_SECRET}".encode('ascii')
-            auth_base64 = base64.b64encode(auth_bytes).decode('ascii')
-            
-            auth_url = 'https://accounts.spotify.com/api/token'
-            headers = {
-                'Authorization': f'Basic {auth_base64}',
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-            data = {'grant_type': 'client_credentials'}
-            
-            response = requests.post(auth_url, headers=headers, data=data, timeout=10)
-            
-            if response.status_code != 200:
-                raise Exception(f"Failed to get Spotify token: {response.text}")
-            
-            token_data = response.json()
-            token_info["access_token"] = token_data["access_token"]
-            expires_in = token_data.get("expires_in", 3600)
-            token_info["expires_at"] = datetime.now() + timedelta(seconds=expires_in)
-            
-            print("Successfully obtained Spotify token")
-            
-        except Exception as e:
-            print(f"Error getting Spotify token: {str(e)}")
-            raise Exception(f"Failed to get Spotify token: {str(e)}")
-    
-    return token_info["access_token"]
-
-def get_spotify_image(track_name: str, artist_name: str) -> Optional[str]:
-    """Spotify에서 트랙 이미지 가져오기"""
-    try:
-        access_token = get_spotify_token()
-        
-        search_url = 'https://api.spotify.com/v1/search'
-        headers = {
-            'Authorization': f'Bearer {access_token}'
-        }
-        
-        # 검색 쿼리
-        query = f'track:"{track_name}" artist:"{artist_name}"'
-        params = {
-            'q': query,
-            'type': 'track',
-            'limit': 1,
-        }
-        
-        response = requests.get(search_url, headers=headers, params=params, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            tracks = data.get('tracks', {}).get('items', [])
-            
-            if tracks:
-                track = tracks[0]
-                album_images = track.get('album', {}).get('images', [])
-                
-                if album_images:
-                    # 300x300 크기 우선 선택, 없으면 첫 번째 이미지
-                    for img in album_images:
-                        if img.get('height') == 300:
-                            return img.get('url')
-                    
-                    return album_images[0].get('url')
-        
-        return None
-                        
-    except Exception as e:
-        print(f"Error fetching Spotify image for {track_name} - {artist_name}: {str(e)}")
-        return None
-
 @router.get("/chartPage")
-async def getTop100():
+async def getTop100(db: AsyncSession = Depends(provide_session)):
     """
     Last.fm 차트 100곡 가져오기 + Spotify 이미지 포함
     """
@@ -143,6 +56,19 @@ async def getTop100():
                 else:
                     print(f"✗ {i}/100 - {track_name} (Spotify 이미지 없음)")
             
+            # 추가: DB에 저장할 트랙 데이터 준비 (좋아요/플레이리스트 기능용)
+            track_data_for_db = {
+                'title': track_name,
+                'artist': artist_name,
+                'image_small': spotify_image,
+                'playcount': track.get('playcount'),
+                'listeners': track.get('listeners'),
+                'url': track.get('url')
+            }
+            
+            # 추가: DB에 저장하여 song_id 생성
+            song_id = await save_track_to_db(db, track_data_for_db, "lastfm")
+            
             track_info = {
                 'rank': i,
                 'title': track_name,
@@ -150,6 +76,7 @@ async def getTop100():
                 'listeners': track.get('listeners'),
                 'mbid': track.get('mbid'),
                 'url': track.get('url'),
+                'song_id': song_id,  # 추가: 좋아요/플레이리스트 기능을 위한 DB song_id
                 'artist': {
                     'name': artist_name,
                     'mbid': track.get('artist', {}).get('mbid'),
@@ -173,7 +100,7 @@ async def getTop100():
         return {"error": f"Failed to fetch chart data: {str(e)}"}
 
 @router.post("/searchPage")
-async def search_result(query: str):
+async def search_result(query: str, db: AsyncSession = Depends(provide_session)):
     URL = 'https://api.spotify.com/v1/search'
     
     try:
@@ -228,6 +155,20 @@ async def search_result(query: str):
                 if not track_image:
                     track_image = album_images[0].get('url')
             
+            # 추가: DB에 저장할 트랙 데이터 준비 (좋아요/플레이리스트 기능용)
+            track_data_for_db = {
+                'title': track.get('name'),
+                'artist': track.get('artists', [{}])[0].get('name') if track.get('artists') else None,
+                'album': track.get('album', {}).get('name'),
+                'duration_ms': track.get('duration_ms'),
+                'preview_url': track.get('preview_url'),
+                'image_small': track_image,
+                'spotify_id': track.get('id')
+            }
+            
+            # 추가: DB에 저장하여 song_id 생성
+            song_id = await save_track_to_db(db, track_data_for_db, "spotify")
+            
             track_summary = {
                 'id': track.get('id'),
                 'name': track.get('name'),
@@ -236,7 +177,8 @@ async def search_result(query: str):
                 'duration_ms': track.get('duration_ms'),
                 'preview_url': track.get('preview_url'),
                 'image': track_image,  # 앨범 이미지 추가
-                'url': track.get('external_urls', {}).get('spotify')
+                'url': track.get('external_urls', {}).get('spotify'),
+                'song_id': song_id  # 추가: 좋아요/플레이리스트 기능을 위한 DB song_id
             }
             tracks.append(track_summary)
 
