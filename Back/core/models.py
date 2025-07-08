@@ -126,3 +126,24 @@ class ArtistComment(Base):
 
     user = relationship("User", back_populates="artist_comments")
     artist = relationship("Artist", back_populates="comments")
+    
+class RecommendedArtist(Base):
+    __tablename__ = "recommended_artists"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    artist_id = Column(String, ForeignKey("artists.id", ondelete="CASCADE"), primary_key=True)
+
+    user = relationship("User", backref="recommended_artists")
+    artist = relationship("Artist", backref="recommended_to_users")
+    
+class RecommendedSong(Base):
+    __tablename__ = "recommended_songs"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    artist_id = Column(String, ForeignKey("artists.id", ondelete="CASCADE"), nullable=False)
+    song_id = Column(Integer, ForeignKey("songs.id", ondelete="CASCADE"), primary_key=True)
+
+    user = relationship("User", backref="recommended_songs")
+    artist = relationship("Artist", backref="recommended_songs_to_users")
+    song = relationship("Song", backref="recommended_to_users")
+
