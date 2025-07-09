@@ -1,224 +1,451 @@
 // src/pages/Home.jsx
-import React, { useState } from 'react';
-import { Play, Heart, Clock, TrendingUp, Music, Users, Star, Shuffle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+  TrendingUp, 
+  Sparkles, 
+  Music, 
+  User, 
+  Play, 
+  Heart, 
+  Users, 
+  Clock,
+  Plus,
+  Library
+} from 'lucide-react';
+import axios from 'axios';
 import '../styles/Home.css';
 
 const Home = () => {
-  const [playingId, setPlayingId] = useState(null);
-  
-  // 홈 페이지 4개 섹션 데이터
-  const homeData = {
-    // 1. 오늘의 추천 (좌상단)
-    dailyRecommendations: {
-      title: '오늘의 추천',
-      subtitle: '당신을 위한 맞춤 음악',
-      icon: <Star className="section-icon" size={24} />,
-      color: '#ff6b6b',
-      items: [
-        { id: 1, title: '잔잔한 아침', artist: '로피 비트', plays: '2.1M', duration: '3:24' },
-        { id: 2, title: '활기찬 오후', artist: '팝 아티스트', plays: '1.8M', duration: '3:45' },
-        { id: 3, title: '감성적인 저녁', artist: '인디 밴드', plays: '3.2M', duration: '4:12' },
-        { id: 4, title: '편안한 밤', artist: '재즈 트리오', plays: '1.5M', duration: '5:08' }
-      ]
-    },
-    
-    // 2. 최신 음악 (우상단)
-    newReleases: {
-      title: '최신 음악',
-      subtitle: '따끈따끈한 신곡',
-      icon: <TrendingUp className="section-icon" size={24} />,
-      color: '#4ecdc4',
-      items: [
-        { id: 5, title: '신나는 여름', artist: '써머 보이즈', plays: '500K', duration: '3:15', isNew: true },
-        { id: 6, title: '꿈꾸는 밤', artist: '드림 걸스', plays: '750K', duration: '4:02', isNew: true },
-        { id: 7, title: '도시의 새벽', artist: '어반 사운드', plays: '1.2M', duration: '3:33', isNew: true },
-        { id: 8, title: '여행의 끝', artist: '트래블 뮤직', plays: '380K', duration: '4:45', isNew: true }
-      ]
-    },
-    
-    // 3. 인기 플레이리스트 (좌하단)
-    popularPlaylists: {
-      title: '인기 플레이리스트',
-      subtitle: '모두가 듣는 플레이리스트',
-      icon: <Users className="section-icon" size={24} />,
-      color: '#a8e6cf',
-      items: [
-        { id: 9, title: '워킹 아웃', description: '운동할 때 듣기 좋은 신나는 음악', tracks: 25, followers: '12.5K' },
-        { id: 10, title: '집중 스터디', description: '공부할 때 집중력을 높여주는 BGM', tracks: 18, followers: '8.7K' },
-        { id: 11, title: '드라이브', description: '야간 드라이브용 감성 플레이리스트', tracks: 32, followers: '15.2K' },
-        { id: 12, title: '카페 음악', description: '여유로운 카페에서 듣는 음악', tracks: 28, followers: '9.8K' }
-      ]
-    },
-    
-    // 4. 추천 아티스트 (우하단)
-    featuredArtists: {
-      title: '추천 아티스트',
-      subtitle: '주목할 만한 아티스트들',
-      icon: <Users className="section-icon" size={24} />,
-      color: '#8b5cf6',
-      items: [
-        { id: 13, name: 'BTS (방탄소년단)', genre: 'K-Pop, Hip-Hop', followers: '5.2M', albums: 9, isVerified: true, initial: 'B' },
-        { id: 14, name: 'NewJeans', genre: 'K-Pop, R&B', followers: '1.9M', albums: 3, isVerified: true, initial: 'N' },
-        { id: 15, name: 'AKMU (악뮤)', genre: 'Indie, Folk', followers: '1.2M', albums: 7, isVerified: true, initial: 'A' },
-        { id: 16, name: 'IU (아이유)', genre: 'K-Pop, Ballad', followers: '2.8M', albums: 15, isVerified: true, initial: 'I' }
-      ]
+  const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [playlists, setPlaylists] = useState([]);
+  const [playlistsLoading, setPlaylistsLoading] = useState(true);
+
+  // API 클라이언트 설정
+  const apiClient = axios.create({
+    baseURL: 'http://54.180.116.4:8000',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  // 토큰 추가 인터셉터
+  apiClient.interceptors.request.use((config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    return config;
+  });
+
+  // 로그인 상태 확인 및 플레이리스트 로드
+  useEffect(() => {
+    const checkLoginAndLoadPlaylists = async () => {
+      const token = localStorage.getItem('accessToken');
+      setIsLoggedIn(!!token);
+      
+      if (token) {
+        try {
+          setPlaylistsLoading(true);
+          const response = await apiClient.get('/playlists/my-playlists');
+          setPlaylists(response.data || response || []);
+        } catch (error) {
+          console.error('플레이리스트 로드 실패:', error);
+          setPlaylists([]);
+        } finally {
+          setPlaylistsLoading(false);
+        }
+      } else {
+        setPlaylistsLoading(false);
+        setPlaylists([]);
+      }
+    };
+
+    checkLoginAndLoadPlaylists();
+
+    // 로그인 상태 변경 이벤트 리스닝
+    const handleLoginStatusChange = () => {
+      checkLoginAndLoadPlaylists();
+    };
+
+    window.addEventListener('login-status-change', handleLoginStatusChange);
+    window.addEventListener('playlist-updated', checkLoginAndLoadPlaylists);
+
+    return () => {
+      window.removeEventListener('login-status-change', handleLoginStatusChange);
+      window.removeEventListener('playlist-updated', checkLoginAndLoadPlaylists);
+    };
+  }, []);
+
+  // 플레이리스트 생성 모달 열기 - 사이드바 모달을 통해 사용자 입력 받기
+  const handleCreatePlaylist = () => {
+    if (!isLoggedIn) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    
+    // 사이드바에게 모달 열기 요청 (빈 데이터로 전송하여 사용자가 직접 입력하도록)
+    window.dispatchEvent(new CustomEvent('create-playlist-request', {
+      detail: null // 빈 데이터로 전송하여 모달에서 사용자가 직접 입력
+    }));
   };
 
-  // 재생 버튼 클릭 핸들러
-  const handlePlay = (itemId) => {
-    setPlayingId(playingId === itemId ? null : itemId);
-  };
+  // 더미 데이터들
+  const dailyMusic = [
+    {
+      id: 1,
+      title: "Blinding Lights",
+      artist: "The Weeknd",
+      plays: "1.2M",
+      isNew: false,
+      color: "#ff6b6b"
+    },
+    {
+      id: 2,
+      title: "Good 4 U",
+      artist: "Olivia Rodrigo",
+      plays: "980K",
+      isNew: true,
+      color: "#4ecdc4"
+    },
+    {
+      id: 3,
+      title: "Stay",
+      artist: "The Kid LAROI",
+      plays: "756K",
+      isNew: false,
+      color: "#45b7d1"
+    },
+    {
+      id: 4,
+      title: "Industry Baby",
+      artist: "Lil Nas X",
+      plays: "643K",
+      isNew: true,
+      color: "#96ceb4"
+    }
+  ];
 
-  // 음악 아이템 렌더링 (일반 음악용)
-  const renderMusicItem = (item, sectionColor) => (
-    <div key={item.id} className="music-item">
-      <div className="music-thumbnail" style={{ backgroundColor: `${sectionColor}20` }}>
-        <button 
-          className="play-btn"
-          onClick={() => handlePlay(item.id)}
-          style={{ backgroundColor: sectionColor }}
-        >
-          <Play size={12} fill="white" />
-        </button>
-      </div>
-      <div className="music-info">
-        <h5 className="music-title">{item.title}</h5>
-        <p className="music-artist">{item.artist}</p>
-        <div className="music-stats">
-          <span className="plays">{item.plays}</span>
-          <span className="duration">{item.duration}</span>
-          {item.isNew && <span className="new-badge">NEW</span>}
-        </div>
-      </div>
-    </div>
-  );
+  const newReleases = [
+    {
+      id: 1,
+      title: "Anti-Hero",
+      artist: "Taylor Swift",
+      album: "Midnights",
+      isNew: true,
+      color: "#ffeaa7"
+    },
+    {
+      id: 2,
+      title: "Unholy",
+      artist: "Sam Smith",
+      album: "Gloria",
+      isNew: true,
+      color: "#fd79a8"
+    },
+    {
+      id: 3,
+      title: "As It Was",
+      artist: "Harry Styles",
+      album: "Harry's House",
+      isNew: false,
+      color: "#fdcb6e"
+    }
+  ];
 
-  // 플레이리스트 아이템 렌더링
-  const renderPlaylistItem = (item, sectionColor) => (
-    <div key={item.id} className="playlist-item">
-      <div className="playlist-thumbnail" style={{ backgroundColor: `${sectionColor}20` }}>
-        <Music size={16} style={{ color: sectionColor }} />
-      </div>
-      <div className="playlist-info">
-        <h5 className="playlist-title">{item.title}</h5>
-        <p className="playlist-description">{item.description}</p>
-        <div className="playlist-stats">
-          <span className="track-count">{item.tracks}곡</span>
-          <span className="followers">{item.followers} 팔로워</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  // 아티스트 아이템 렌더링
-  const renderArtistItem = (item, sectionColor) => (
-    <div key={item.id} className="home-artist-item">
-      <div className="home-artist-avatar" style={{ backgroundColor: `${sectionColor}20` }}>
-        <div className="home-artist-initial" style={{ color: sectionColor }}>
-          {item.initial || item.name.charAt(0)}
-        </div>
-        {item.isVerified && (
-          <div className="verified-badge" style={{ backgroundColor: sectionColor }}>
-            ✓
-          </div>
-        )}
-      </div>
-      <div className="home-artist-info">
-        <h5 className="home-artist-name">{item.name}</h5>
-        <p className="home-artist-genre">{item.genre}</p>
-        <div className="home-artist-stats">
-          <span className="followers">{item.followers} 팔로워</span>
-          <span className="albums">{item.albums} 앨범</span>
-        </div>
-      </div>
-      <button 
-        className="follow-btn"
-        style={{ backgroundColor: sectionColor }}
-      >
-        팔로우
-      </button>
-    </div>
-  );
+  const artists = [
+    {
+      id: 1,
+      name: "Taylor Swift",
+      genre: "Pop",
+      followers: "89.2M",
+      isVerified: true,
+      initial: "T",
+      color: "#e17055"
+    },
+    {
+      id: 2,
+      name: "Drake",
+      genre: "Hip Hop",
+      followers: "67.8M",
+      isVerified: true,
+      initial: "D",
+      color: "#74b9ff"
+    },
+    {
+      id: 3,
+      name: "BTS",
+      genre: "K-Pop",
+      followers: "54.3M",
+      isVerified: true,
+      initial: "B",
+      color: "#a29bfe"
+    },
+    {
+      id: 4,
+      name: "Ariana Grande",
+      genre: "Pop",
+      followers: "51.7M",
+      isVerified: true,
+      initial: "A",
+      color: "#fd79a8"
+    }
+  ];
 
   return (
     <div className="home-page">
       <div className="home-grid">
-        {/* 1. 오늘의 추천 */}
-        <div className="grid-section daily-section">
-          <div className="section-header" style={{ color: homeData.dailyRecommendations.color }}>
-            {homeData.dailyRecommendations.icon}
-            <div className="section-title-group">
-              <h3 className="section-title">{homeData.dailyRecommendations.title}</h3>
-              <p className="section-subtitle">{homeData.dailyRecommendations.subtitle}</p>
+        {/* 오늘의 추천 음악 */}
+        <section className="grid-section daily-section">
+          <div className="section-header">
+            <div className="section-icon" style={{ background: 'rgba(255, 107, 107, 0.1)' }}>
+              <TrendingUp size={20} color="#ff6b6b" />
             </div>
-            <button className="shuffle-btn" style={{ backgroundColor: homeData.dailyRecommendations.color }}>
-              <Shuffle size={16} />
+            <div className="section-title-group">
+              <h2 className="section-title">오늘의 추천</h2>
+              <p className="section-subtitle">당신을 위한 특별한 선곡</p>
+            </div>
+            <button className="shuffle-btn" style={{ background: '#ff6b6b' }}>
+              <Play size={12} />
+              셔플
             </button>
           </div>
           <div className="section-content">
-            {homeData.dailyRecommendations.items.map(item => 
-              renderMusicItem(item, homeData.dailyRecommendations.color)
-            )}
+            {dailyMusic.map(music => (
+              <div key={music.id} className="music-item">
+                <div 
+                  className="music-thumbnail" 
+                  style={{ background: `linear-gradient(45deg, ${music.color}, ${music.color}90)` }}
+                >
+                  <button 
+                    className="play-btn"
+                    style={{ background: 'rgba(255, 255, 255, 0.9)', color: music.color }}
+                  >
+                    <Play size={12} />
+                  </button>
+                </div>
+                <div className="music-info">
+                  <h3 className="music-title">{music.title}</h3>
+                  <p className="music-artist">{music.artist}</p>
+                  <div className="music-stats">
+                    <span>{music.plays} 재생</span>
+                    {music.isNew && <span className="new-badge">NEW</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
 
-        {/* 2. 최신 음악 */}
-        <div className="grid-section new-section">
-          <div className="section-header" style={{ color: homeData.newReleases.color }}>
-            {homeData.newReleases.icon}
-            <div className="section-title-group">
-              <h3 className="section-title">{homeData.newReleases.title}</h3>
-              <p className="section-subtitle">{homeData.newReleases.subtitle}</p>
+        {/* 신곡 & 인기곡 */}
+        <section className="grid-section new-section">
+          <div className="section-header">
+            <div className="section-icon" style={{ background: 'rgba(78, 205, 196, 0.1)' }}>
+              <Sparkles size={20} color="#4ecdc4" />
             </div>
-            <button className="view-all-btn" style={{ color: homeData.newReleases.color }}>
-              전체보기
-            </button>
+            <div className="section-title-group">
+              <h2 className="section-title">신곡 & 인기곡</h2>
+              <p className="section-subtitle">최신 트렌드를 만나보세요</p>
+            </div>
+            <Link to="/chart" className="view-all-btn" style={{ color: '#4ecdc4', borderColor: '#4ecdc4' }}>
+              차트 보기
+            </Link>
           </div>
           <div className="section-content">
-            {homeData.newReleases.items.map(item => 
-              renderMusicItem(item, homeData.newReleases.color)
-            )}
+            {newReleases.map(music => (
+              <div key={music.id} className="music-item">
+                <div 
+                  className="music-thumbnail" 
+                  style={{ background: `linear-gradient(45deg, ${music.color}, ${music.color}90)` }}
+                >
+                  <button 
+                    className="play-btn"
+                    style={{ background: 'rgba(255, 255, 255, 0.9)', color: music.color }}
+                  >
+                    <Play size={12} />
+                  </button>
+                </div>
+                <div className="music-info">
+                  <h3 className="music-title">{music.title}</h3>
+                  <p className="music-artist">{music.artist}</p>
+                  <div className="music-stats">
+                    <span>{music.album}</span>
+                    {music.isNew && <span className="new-badge">NEW</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
 
-        {/* 3. 인기 플레이리스트 */}
-        <div className="grid-section playlist-section">
-          <div className="section-header" style={{ color: homeData.popularPlaylists.color }}>
-            {homeData.popularPlaylists.icon}
-            <div className="section-title-group">
-              <h3 className="section-title">{homeData.popularPlaylists.title}</h3>
-              <p className="section-subtitle">{homeData.popularPlaylists.subtitle}</p>
+        {/* 내 플레이리스트 */}
+        <section className="grid-section playlist-section">
+          <div className="section-header">
+            <div className="section-icon" style={{ background: 'rgba(168, 230, 207, 0.1)' }}>
+              <Library size={20} color="#a8e6cf" />
             </div>
-            <button className="create-btn" style={{ backgroundColor: homeData.popularPlaylists.color }}>
-              만들기
-            </button>
-          </div>
-          <div className="section-content">
-            {homeData.popularPlaylists.items.map(item => 
-              renderPlaylistItem(item, homeData.popularPlaylists.color)
+            <div className="section-title-group">
+              <h2 className="section-title">내 플레이리스트</h2>
+              <p className="section-subtitle">나만의 음악 컬렉션</p>
+            </div>
+            {isLoggedIn ? (
+              <button 
+                className="create-btn" 
+                style={{ background: '#a8e6cf' }}
+                onClick={handleCreatePlaylist}
+              >
+                <Plus size={12} />
+                만들기
+              </button>
+            ) : (
+              <Link to="/login" className="view-all-btn" style={{ color: '#a8e6cf', borderColor: '#a8e6cf' }}>
+                로그인
+              </Link>
             )}
           </div>
-        </div>
+          <div className="section-content">
+            {!isLoggedIn ? (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px 20px', 
+                color: '#6b7280',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <Music size={40} color="#d1d5db" />
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>로그인하여 플레이리스트를 만들어보세요</p>
+              </div>
+            ) : playlistsLoading ? (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px 20px', 
+                color: '#6b7280' 
+              }}>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>플레이리스트를 불러오는 중...</p>
+              </div>
+            ) : playlists.length === 0 ? (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px 20px', 
+                color: '#6b7280',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '16px'
+              }}>
+                <Music size={40} color="#d1d5db" />
+                <div>
+                  <p style={{ margin: '0 0 8px 0', fontSize: '0.875rem', fontWeight: '600' }}>
+                    플레이리스트를 만들어보세요
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#9ca3af' }}>
+                    좋아하는 음악들을 모아서 나만의 플레이리스트를 만들어보세요
+                  </p>
+                </div>
+                <button 
+                  className="create-btn" 
+                  style={{ background: '#a8e6cf', marginTop: '8px' }}
+                  onClick={handleCreatePlaylist}
+                >
+                  <Plus size={12} />
+                  첫 플레이리스트 만들기
+                </button>
+              </div>
+            ) : (
+              <>
+                {playlists.slice(0, 4).map((playlist, index) => (
+                  <div 
+                    key={playlist.id} 
+                    className="playlist-item"
+                    onClick={() => navigate(`/playlists/${playlist.id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div 
+                      className="playlist-thumbnail" 
+                      style={{ 
+                        background: `linear-gradient(45deg, #a8e6cf, #a8e6cf90)`,
+                        color: 'white'
+                      }}
+                    >
+                      <Music size={20} />
+                    </div>
+                    <div className="playlist-info">
+                      <h3 className="playlist-title">{playlist.title}</h3>
+                      <p className="playlist-description">
+                        {playlist.description || '사용자 플레이리스트'}
+                      </p>
+                      <div className="playlist-stats">
+                        <span>0곡</span>
+                        <span>•</span>
+                        <span>방금 전</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {playlists.length > 4 && (
+                  <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                    <Link 
+                      to="/playlists" 
+                      className="view-all-btn" 
+                      style={{ 
+                        color: '#a8e6cf', 
+                        borderColor: '#a8e6cf',
+                        textDecoration: 'none',
+                        display: 'inline-block'
+                      }}
+                    >
+                      모든 플레이리스트 보기 ({playlists.length})
+                    </Link>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </section>
 
-        {/* 4. 추천 아티스트 */}
-        <div className="grid-section home-artist-section">
-          <div className="section-header" style={{ color: homeData.featuredArtists.color }}>
-            {homeData.featuredArtists.icon}
-            <div className="section-title-group">
-              <h3 className="section-title">{homeData.featuredArtists.title}</h3>
-              <p className="section-subtitle">{homeData.featuredArtists.subtitle}</p>
+        {/* 추천 아티스트 */}
+        <section className="grid-section home-artist-section">
+          <div className="section-header">
+            <div className="section-icon" style={{ background: 'rgba(139, 92, 246, 0.1)' }}>
+              <User size={20} color="#8b5cf6" />
             </div>
-            <button className="discover-btn" style={{ backgroundColor: homeData.featuredArtists.color }}>
-              발견하기
-            </button>
+            <div className="section-title-group">
+              <h2 className="section-title">추천 아티스트</h2>
+              <p className="section-subtitle">새로운 아티스트를 발견해보세요</p>
+            </div>
+            <Link to="/artist" className="view-all-btn" style={{ color: '#8b5cf6', borderColor: '#8b5cf6' }}>
+              더보기
+            </Link>
           </div>
           <div className="section-content">
-            {homeData.featuredArtists.items.map(item => 
-              renderArtistItem(item, homeData.featuredArtists.color)
-            )}
+            {artists.map(artist => (
+              <div key={artist.id} className="home-artist-item">
+                <div className="home-artist-avatar" style={{ background: `linear-gradient(45deg, ${artist.color}, ${artist.color}90)` }}>
+                  <span className="home-artist-initial" style={{ color: 'white' }}>
+                    {artist.initial}
+                  </span>
+                  {artist.isVerified && (
+                    <div className="verified-badge" style={{ background: '#1da1f2' }}>
+                      ✓
+                    </div>
+                  )}
+                </div>
+                <div className="home-artist-info">
+                  <h3 className="home-artist-name">{artist.name}</h3>
+                  <p className="home-artist-genre">{artist.genre}</p>
+                  <div className="home-artist-stats">
+                    <Users size={10} />
+                    <span>{artist.followers} 팔로워</span>
+                  </div>
+                </div>
+                <button className="follow-btn" style={{ background: '#8b5cf6' }}>
+                  팔로우
+                </button>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 // src/pages/Chart.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Heart, Plus } from 'lucide-react';
+import { Play, Heart, Plus, X, Music, Check } from 'lucide-react';
 import axios from 'axios';
 import '../styles/Chart.css';
 
@@ -9,12 +9,34 @@ const Chart = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   
+  // 새로 추가된 상태들
+  const [likedSongs, setLikedSongs] = useState(new Set()); // 좋아요한 노래 ID들
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [selectedSong, setSelectedSong] = useState(null);
+  const [playlists, setPlaylists] = useState([]);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  
   // 중복 요청 방지를 위한 ref
   const isRequestingRef = useRef(false);
 
-  // 차트 데이터 가져오기
+  // API 클라이언트 설정
+  const apiClient = axios.create({
+    baseURL: 'http://54.180.116.4:8000',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  // 토큰 추가 인터셉터
+  apiClient.interceptors.request.use((config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
+  // 차트 데이터 가져오기 (기존 함수 유지)
   const fetchChartData = async (force = false) => {
-    // 강제 요청이 아니고 이미 요청 중이면 중단
     if (!force && isRequestingRef.current) {
       console.log('이미 요청 중이므로 중복 요청을 방지합니다.');
       return;
@@ -28,7 +50,7 @@ const Chart = () => {
       console.log('차트 데이터 요청 중...');
       
       const response = await axios.get('http://54.180.116.4:8000/api/chartPage', {
-        timeout: 100000, // 100초 (Spotify 이미지 처리 시간 고려)
+        timeout: 100000,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
@@ -57,24 +79,132 @@ const Chart = () => {
     }
   };
 
-  // 컴포넌트 마운트 시 데이터 가져오기
+  // 좋아요 토글 함수
+  const handleLikeToggle = async (songId) => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    try {
+      const response = await apiClient.post(`/playlists/like-song/${songId}`);
+      console.log('좋아요 토글 성공:', response.data);
+      
+      // 좋아요 상태 업데이트
+      setLikedSongs(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(songId)) {
+          newSet.delete(songId);
+        } else {
+          newSet.add(songId);
+        }
+        return newSet;
+      });
+      
+    } catch (error) {
+      console.error('좋아요 토글 실패:', error);
+      if (error.response?.status === 401) {
+        alert('로그인이 필요합니다.');
+      } else {
+        alert('좋아요 처리 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
+  // 플레이리스트 모달 열기
+  const handleAddToPlaylist = (song) => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    setSelectedSong(song);
+    setShowPlaylistModal(true);
+    fetchPlaylists();
+  };
+
+  // 플레이리스트 목록 가져오기
+  const fetchPlaylists = async () => {
+    try {
+      const response = await apiClient.get('/playlists/my-playlists');
+      setPlaylists(response.data || response);
+    } catch (error) {
+      console.error('플레이리스트 목록 조회 실패:', error);
+      setPlaylists([]);
+    }
+  };
+
+  // 새 플레이리스트 생성
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistName.trim()) return;
+
+    try {
+      const response = await apiClient.post('/playlists/', {
+        title: newPlaylistName.trim(),
+        description: `${selectedSong?.title}에서 생성됨`
+      });
+      
+      console.log('플레이리스트 생성 성공:', response.data);
+      setNewPlaylistName('');
+      setShowCreateForm(false);
+      await fetchPlaylists(); // 목록 새로고침
+      
+      // 생성된 플레이리스트에 바로 노래 추가
+      if (response.data?.id) {
+        await addSongToPlaylist(response.data.id);
+      }
+      
+    } catch (error) {
+      console.error('플레이리스트 생성 실패:', error);
+      alert('플레이리스트 생성 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 플레이리스트에 노래 추가
+  const addSongToPlaylist = async (playlistId) => {
+    // 백엔드에서 song_id를 제공하므로 이를 사용
+    if (!selectedSong?.song_id) {
+      alert('노래 정보를 찾을 수 없습니다.');
+      return;
+    }
+  
+    try {
+      const response = await apiClient.post(`/playlists/${playlistId}/songs`, {
+        song_id: selectedSong.song_id // Chart API에서 제공하는 song_id 사용
+      });
+      
+      console.log('노래 추가 성공:', response.data);
+      alert('플레이리스트에 추가되었습니다!');
+      setShowPlaylistModal(false);
+      
+    } catch (error) {
+      console.error('노래 추가 실패:', error);
+      if (error.response?.data?.detail?.includes('already in playlist')) {
+        alert('이미 플레이리스트에 있는 노래입니다.');
+      } else {
+        alert('플레이리스트에 추가하는 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
+  // 컴포넌트 마운트 시 데이터 가져오기 (기존 로직 유지)
   useEffect(() => {
     fetchChartData();
     
-    // 컴포넌트 언마운트 시 상태 초기화
     return () => {
       isRequestingRef.current = false;
     };
-  }, []); // 빈 배열 유지 - 마운트 시에만 실행
+  }, []);
 
-  // 차트 순위별 스타일
+  // 기존 함수들 유지
   const getRankClass = (rank) => {
     if (rank === 1) return 'top-1';
     if (rank <= 3) return 'top-3';
     return '';
   };
 
-  // 이미지 소스 배지 표시
   const getImageSourceBadge = (source) => {
     if (source === 'spotify') {
       return <span className="image-source-badge spotify">Spotify</span>;
@@ -84,9 +214,8 @@ const Chart = () => {
     return null;
   };
 
-  // 다시 시도 버튼 핸들러
   const handleRetry = () => {
-    fetchChartData(true); // 강제 재시도
+    fetchChartData(true);
   };
 
   return (
@@ -95,7 +224,7 @@ const Chart = () => {
         <h2 className="page-title">인기차트</h2>
       </div>
       
-      {/* 로딩 상태 */}
+      {/* 로딩 상태 (기존 유지) */}
       {isLoading && (
         <div className="chart-loading">
           <div className="loading-spinner"></div>
@@ -106,7 +235,7 @@ const Chart = () => {
         </div>
       )}
 
-      {/* 에러 상태 */}
+      {/* 에러 상태 (기존 유지) */}
       {error && (
         <div className="chart-error">
           <p>{error}</p>
@@ -116,7 +245,7 @@ const Chart = () => {
         </div>
       )}
       
-      {/* 차트 리스트 */}
+      {/* 차트 리스트 (기존 구조 유지, 버튼 기능만 추가) */}
       {!isLoading && !error && chartData.length > 0 && (
         <div className="chart-list">
           {chartData.map(item => (
@@ -163,10 +292,21 @@ const Chart = () => {
                 >
                   <Play size={18} />
                 </button>
-                <button className="chart-action" title="좋아요">
-                  <Heart size={18} />
+                <button 
+                  className={`chart-action ${likedSongs.has(item.song_id) ? 'liked' : ''}`}
+                  onClick={() => handleLikeToggle(item.song_id)}
+                  title="좋아요"
+                >
+                  <Heart 
+                    size={18} 
+                    fill={likedSongs.has(item.song_id) ? 'currentColor' : 'none'}
+                  />
                 </button>
-                <button className="chart-action" title="플레이리스트에 추가">
+                <button 
+                  className="chart-action" 
+                  onClick={() => handleAddToPlaylist(item)}
+                  title="플레이리스트에 추가"
+                >
                   <Plus size={18} />
                 </button>
               </div>
@@ -175,13 +315,88 @@ const Chart = () => {
         </div>
       )}
 
-      {/* 데이터 없음 */}
+      {/* 데이터 없음 (기존 유지) */}
       {!isLoading && !error && chartData.length === 0 && (
         <div className="chart-empty">
           <p>차트 데이터가 없습니다.</p>
           <button onClick={handleRetry} className="retry-button">
             다시 시도
           </button>
+        </div>
+      )}
+
+      {/* 플레이리스트 선택 모달 */}
+      {showPlaylistModal && (
+        <div className="playlist-modal-overlay" onClick={() => setShowPlaylistModal(false)}>
+          <div className="playlist-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="playlist-modal-header">
+              <h3>플레이리스트에 추가</h3>
+              <button 
+                className="close-button"
+                onClick={() => setShowPlaylistModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="playlist-modal-content">
+              <div className="selected-song-info">
+                <strong>{selectedSong?.title}</strong>
+                <span>by {selectedSong?.artist?.name}</span>
+              </div>
+              
+              {!showCreateForm && (
+                <button 
+                  className="create-playlist-button"
+                  onClick={() => setShowCreateForm(true)}
+                >
+                  <Plus size={16} />
+                  새 플레이리스트 만들기
+                </button>
+              )}
+
+              {showCreateForm && (
+                <div className="create-playlist-form">
+                  <input
+                    type="text"
+                    placeholder="플레이리스트 이름"
+                    value={newPlaylistName}
+                    onChange={(e) => setNewPlaylistName(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleCreatePlaylist()}
+                  />
+                  <div className="form-actions">
+                    <button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}>
+                      <Check size={16} />
+                      생성
+                    </button>
+                    <button onClick={() => {
+                      setShowCreateForm(false);
+                      setNewPlaylistName('');
+                    }}>
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="playlists-list">
+                {playlists.length === 0 ? (
+                  <p className="no-playlists">플레이리스트가 없습니다.</p>
+                ) : (
+                  playlists.map(playlist => (
+                    <div 
+                      key={playlist.id}
+                      className="playlist-item"
+                      onClick={() => addSongToPlaylist(playlist.id)}
+                    >
+                      <Music size={16} />
+                      <span>{playlist.title}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

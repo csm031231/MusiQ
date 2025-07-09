@@ -12,6 +12,8 @@ import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import './styles/App.css';
 import ArtistPage from './pages/ArtistPage';
+import PlaylistDetail from './pages/PlaylistDetail';
+import LikedSongs from './pages/LikedSongs';
 
 // 모달 컴포넌트
 const Modal = ({ isOpen, onClose, children }) => {
@@ -43,6 +45,8 @@ function App() {
           <Route path="chart" element={<Chart />} />
           <Route path="artist" element={<Artist />} />
           <Route path="artist/:id" element={<ArtistPage />} />
+          <Route path="/liked-songs" element={<LikedSongs />} />
+          <Route path="/playlists/:id" element={<PlaylistDetail />} />
         </Route>
       </Routes>
       

@@ -153,7 +153,7 @@ const api = {
   }
 };
 
-// 스타일드 컴포넌트들 (이전과 동일)
+// 스타일드 컴포넌트들
 const PlaylistsContainer = styled.div`
   padding: 20px;
   max-width: 1400px;
@@ -279,28 +279,6 @@ const SearchIcon = styled(Search)`
   color: #9ca3af;
   width: 16px;
   height: 16px;
-`;
-
-const FilterTabs = styled.div`
-  display: flex;
-  gap: 4px;
-  background: white;
-  border-radius: 10px;
-  padding: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-`;
-
-const FilterTab = styled.button`
-  background: ${props => props.active ? '#667eea' : 'transparent'};
-  color: ${props => props.active ? 'white' : '#6b7280'};
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
 `;
 
 const PlaylistsGrid = styled.div`
@@ -541,7 +519,7 @@ const EmptyDescription = styled.p`
   margin: 0 0 24px 0;
 `;
 
-// 전체화면 모달 스타일 (사이드바와 동일)
+// 사이드바와 동일한 모달 스타일
 const FullscreenModalOverlay = styled.div`
   position: fixed;
   top: 0;
@@ -549,100 +527,128 @@ const FullscreenModalOverlay = styled.div`
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  opacity: ${props => props.$show ? 1 : 0};
-  visibility: ${props => props.$show ? 'visible' : 'hidden'};
-  transition: all 0.3s ease;
+  padding: 20px;
+  animation: ${props => props.$show ? 'modalFadeIn 0.3s ease' : 'none'};
+
+  @keyframes modalFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 `;
 
 const FullscreenModalContent = styled.div`
-  width: 90%;
-  max-width: 500px;
-  height: auto;
-  max-height: 80vh;
   background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  color: #1a1a1a;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
   overflow: hidden;
-  position: relative;
   display: flex;
   flex-direction: column;
-  transform: ${props => props.$show ? 'scale(1)' : 'scale(0.9)'};
-  transition: all 0.3s ease;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  border: 1px solid #f1f5f9;
+  animation: ${props => props.$show ? 'modalSlideUp 0.3s ease' : 'none'};
+
+  @keyframes modalSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
 `;
 
 const FullscreenModalHeader = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1.5rem 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-`;
-
-const FullscreenModalTitle = styled.h2`
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0;
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  position: relative;
 `;
 
 const FullscreenModalCloseBtn = styled.button`
   background: none;
   border: none;
-  color: white;
+  color: #6b7280;
   cursor: pointer;
-  padding: 0.5rem;
-  border-radius: 50%;
-  transition: background-color 0.2s ease;
+  padding: 8px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  
+  transition: all 0.2s ease;
+  margin-right: 16px;
+
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background-color: #f1f5f9;
+    color: #374151;
   }
 `;
 
+const FullscreenModalTitle = styled.h2`
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+`;
+
 const FullscreenModalBody = styled.div`
-  padding: 2rem;
   flex: 1;
+  padding: 24px;
   overflow-y: auto;
+  background: #f8fafc;
 `;
 
 const PlaylistForm = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 24px;
 `;
 
 const FormField = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
 `;
 
 const FormLabel = styled.label`
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #374151;
 `;
 
 const FormInput = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
+  background: white;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 1rem;
+  padding: 14px 16px;
+  font-size: 0.875rem;
+  color: #1a1a1a;
+  font-family: inherit;
   transition: all 0.2s ease;
-  box-sizing: border-box;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
 
   &:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
   }
 
   &::placeholder {
@@ -651,21 +657,24 @@ const FormInput = styled.input`
 `;
 
 const FormTextArea = styled.textarea`
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
+  background: white;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  font-size: 1rem;
+  padding: 14px 16px;
+  font-size: 0.875rem;
+  color: #1a1a1a;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
   resize: vertical;
   min-height: 100px;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-  font-family: inherit;
+  line-height: 1.5;
 
   &:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
   }
 
   &::placeholder {
@@ -675,156 +684,56 @@ const FormTextArea = styled.textarea`
 
 const FullscreenModalFooter = styled.div`
   display: flex;
+  justify-content: flex-end;
   gap: 12px;
-  padding: 1.5rem 2rem;
+  padding: 20px 24px 24px;
+  background: white;
   border-top: 1px solid #f1f5f9;
-  background: #fafafa;
 `;
 
 const CancelButton = styled.button`
-  flex: 1;
-  padding: 12px 16px;
-  border: 2px solid #e2e8f0;
+  padding: 12px 24px;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: white;
+  border: none;
+  min-width: 100px;
+  background: #f1f5f9;
   color: #6b7280;
 
   &:hover {
-    background: #f9fafb;
-    border-color: #d1d5db;
+    background: #e2e8f0;
+    color: #374151;
+    transform: translateY(-1px);
   }
 `;
 
 const CreateButtonModal = styled.button`
-  flex: 1;
-  padding: 12px 16px;
-  border: none;
+  padding: 12px 24px;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  border: none;
+  min-width: 100px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 
   &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
   }
 
   &:disabled {
-    background: #d1d5db;
+    background: #9ca3af;
     cursor: not-allowed;
     transform: none;
-    box-shadow: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
-`;
-
-const ModalTitle = styled.h2`
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin: 0 0 20px 0;
-  text-align: center;
-`;
-
-const FormGroup = styled.div`
-  margin-bottom: 16px;
-`;
-
-const Label = styled.label`
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 6px;
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-
-  &:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  }
-`;
-
-const TextArea = styled.textarea`
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  resize: vertical;
-  min-height: 80px;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-
-  &:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  }
-`;
-
-const CheckboxGroup = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-`;
-
-const Checkbox = styled.input`
-  width: 16px;
-  height: 16px;
-  accent-color: #667eea;
-`;
-
-const ModalActions = styled.div`
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-`;
-
-const Button = styled.button`
-  flex: 1;
-  padding: 12px 16px;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  ${props => props.variant === 'primary' ? `
-    background: #667eea;
-    color: white;
-    &:hover {
-      background: #5a67d8;
-    }
-    &:disabled {
-      background: #9ca3af;
-      cursor: not-allowed;
-    }
-  ` : `
-    background: #f1f5f9;
-    color: #6b7280;
-    &:hover {
-      background: #e2e8f0;
-    }
-  `}
 `;
 
 // 스피너 스타일 컴포넌트
@@ -948,32 +857,35 @@ const Playlists = () => {
       const playlistData = event.detail;
       console.log('사이드바에서 플레이리스트 생성 요청:', playlistData);
       
-      try {
-        const createdPlaylist = await api.createPlaylist(playlistData);
-        console.log('사이드바 요청으로 플레이리스트 생성 성공:', createdPlaylist);
-        
-        // 새 플레이리스트를 목록에 추가
-        const newPlaylistWithMeta = {
-          ...createdPlaylist,
-          tracks: 0,
-          isLiked: false
-        };
-        
-        setPlaylists(prev => [newPlaylistWithMeta, ...prev]);
-        
-        // 사이드바 업데이트를 위한 이벤트 발생
-        window.dispatchEvent(new Event('playlist-updated'));
-        
-        // 사이드바에서 생성된 경우에만 플레이리스트 목록 페이지로 이동
-        navigate('/playlists');
-        
-      } catch (error) {
-        console.error('사이드바 요청 플레이리스트 생성 중 오류:', error);
-        
-        if (error.message === '로그인이 필요합니다.') {
-          alert('로그인이 필요합니다.');
-        } else {
-          alert('플레이리스트 생성 중 오류가 발생했습니다.');
+      // 사이드바에서 온 요청이면 모달을 띄우지 않고 바로 API 호출
+      if (playlistData && playlistData.title) {
+        try {
+          const createdPlaylist = await api.createPlaylist(playlistData);
+          console.log('사이드바 요청으로 플레이리스트 생성 성공:', createdPlaylist);
+          
+          // 새 플레이리스트를 목록에 추가
+          const newPlaylistWithMeta = {
+            ...createdPlaylist,
+            tracks: 0,
+            isLiked: false
+          };
+          
+          setPlaylists(prev => [newPlaylistWithMeta, ...prev]);
+          
+          // 사이드바 업데이트를 위한 이벤트 발생
+          window.dispatchEvent(new Event('playlist-updated'));
+          
+          // 사이드바에서 생성된 경우에만 플레이리스트 목록 페이지로 이동
+          navigate('/playlists');
+          
+        } catch (error) {
+          console.error('사이드바 요청 플레이리스트 생성 중 오류:', error);
+          
+          if (error.message === '로그인이 필요합니다.') {
+            alert('로그인이 필요합니다.');
+          } else {
+            alert('플레이리스트 생성 중 오류가 발생했습니다.');
+          }
         }
       }
     };
@@ -1197,7 +1109,7 @@ const Playlists = () => {
       <PlaylistsContainer>
         <LoginRequiredState>
           <LoginIcon>
-            <User size={40} />
+            <Users size={40} />
           </LoginIcon>
           <EmptyTitle>로그인이 필요합니다</EmptyTitle>
           <EmptyDescription>
@@ -1361,74 +1273,100 @@ const Playlists = () => {
       )}
 
       {/* 플레이리스트 생성 모달 - 사이드바와 동일한 전체화면 스타일 */}
-      <FullscreenModalOverlay $show={showCreateModal} onClick={() => setShowCreateModal(false)}>
-        <FullscreenModalContent $show={showCreateModal} onClick={(e) => e.stopPropagation()}>
-          <FullscreenModalHeader>
-            <FullscreenModalTitle>새 재생목록</FullscreenModalTitle>
-            <FullscreenModalCloseBtn onClick={() => setShowCreateModal(false)}>
-              <X size={24} />
-            </FullscreenModalCloseBtn>
-          </FullscreenModalHeader>
-          
-          <FullscreenModalBody>
-            {error && (
-              <div style={{ 
-                background: '#fef2f2', 
-                border: '1px solid #fecaca', 
-                color: '#dc2626', 
-                padding: '12px 16px', 
-                borderRadius: '8px', 
-                marginBottom: '1.5rem', 
-                fontSize: '0.875rem' 
-              }}>
-                {error}
-              </div>
-            )}
+      {showCreateModal && (
+        <FullscreenModalOverlay 
+          $show={showCreateModal} 
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowCreateModal(false);
+            setError(null);
+            setNewPlaylist({ title: '', description: '' });
+          }}
+        >
+          <FullscreenModalContent 
+            $show={showCreateModal} 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FullscreenModalHeader>
+              <FullscreenModalCloseBtn 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCreateModal(false);
+                  setError(null);
+                  setNewPlaylist({ title: '', description: '' });
+                }}
+              >
+                <X size={24} />
+              </FullscreenModalCloseBtn>
+              <FullscreenModalTitle>새 재생목록</FullscreenModalTitle>
+            </FullscreenModalHeader>
             
-            <PlaylistForm>
-              <FormField>
-                <FormLabel htmlFor="playlist-title">제목</FormLabel>
-                <FormInput
-                  id="playlist-title"
-                  type="text"
-                  placeholder="재생목록의 제목을 입력하세요"
-                  value={newPlaylist.title}
-                  onChange={(e) => {
-                    setNewPlaylist(prev => ({ ...prev, title: e.target.value }));
-                    setError(null);
-                  }}
-                />
-              </FormField>
+            <FullscreenModalBody>
+              {error && (
+                <div style={{ 
+                  background: '#fef2f2', 
+                  border: '1px solid #fecaca', 
+                  color: '#dc2626', 
+                  padding: '12px 16px', 
+                  borderRadius: '8px', 
+                  marginBottom: '1.5rem', 
+                  fontSize: '0.875rem' 
+                }}>
+                  {error}
+                </div>
+              )}
               
-              <FormField>
-                <FormLabel htmlFor="playlist-description">설명</FormLabel>
-                <FormTextArea
-                  id="playlist-description"
-                  placeholder="재생목록에 대해 설명해 주세요"
-                  value={newPlaylist.description}
-                  onChange={(e) => setNewPlaylist(prev => ({ ...prev, description: e.target.value }))}
-                />
-              </FormField>
-            </PlaylistForm>
-          </FullscreenModalBody>
-          
-          <FullscreenModalFooter>
-            <CancelButton onClick={() => {
-              setShowCreateModal(false);
-              setError(null);
-              setNewPlaylist({ title: '', description: '' });
-            }}>
-              취소
-            </CancelButton>
-            <CreateButtonModal
-              onClick={handleCreatePlaylist}
-              disabled={!newPlaylist.title.trim()}
-            >
-              만들기
-            </CreateButtonModal>
-          </FullscreenModalFooter>
-        </FullscreenModalContent>
-      </FullscreenModalOverlay>
+              <PlaylistForm>
+                <FormField>
+                  <FormLabel htmlFor="playlist-title">제목</FormLabel>
+                  <FormInput
+                    id="playlist-title"
+                    type="text"
+                    placeholder="재생목록의 제목을 입력하세요"
+                    value={newPlaylist.title}
+                    onChange={(e) => {
+                      setNewPlaylist(prev => ({ ...prev, title: e.target.value }));
+                      setError(null);
+                    }}
+                  />
+                </FormField>
+                
+                <FormField>
+                  <FormLabel htmlFor="playlist-description">설명</FormLabel>
+                  <FormTextArea
+                    id="playlist-description"
+                    placeholder="재생목록에 대해 설명해 주세요"
+                    value={newPlaylist.description}
+                    onChange={(e) => setNewPlaylist(prev => ({ ...prev, description: e.target.value }))}
+                  />
+                </FormField>
+              </PlaylistForm>
+            </FullscreenModalBody>
+            
+            <FullscreenModalFooter>
+              <CancelButton 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCreateModal(false);
+                  setError(null);
+                  setNewPlaylist({ title: '', description: '' });
+                }}
+              >
+                취소
+              </CancelButton>
+              <CreateButtonModal
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCreatePlaylist();
+                }}
+                disabled={!newPlaylist.title.trim()}
+              >
+                만들기
+              </CreateButtonModal>
+            </FullscreenModalFooter>
+          </FullscreenModalContent>
+        </FullscreenModalOverlay>
+      )}
     </PlaylistsContainer>
   );
 };

@@ -1,7 +1,7 @@
 // src/pages/Search.jsx
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search as SearchIcon, Play, Heart, Plus, User, Music, Disc3 } from 'lucide-react';
+import { Search as SearchIcon, Play, Heart, Plus, User, Music, Disc3, X, Check } from 'lucide-react';
 import axios from 'axios';
 import '../styles/Search.css';
 
@@ -13,9 +13,32 @@ const Search = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'albums', 'tracks', 'artists'
+  const [activeFilter, setActiveFilter] = useState('all');
+  
+  // 새로 추가된 상태들
+  const [likedSongs, setLikedSongs] = useState(new Set());
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  const [selectedSong, setSelectedSong] = useState(null);
+  const [playlists, setPlaylists] = useState([]);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // 검색 API 호출 함수
+  // API 클라이언트 설정
+  const apiClient = axios.create({
+    baseURL: 'http://54.180.116.4:8000',
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  // 토큰 추가 인터셉터
+  apiClient.interceptors.request.use((config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
+  // 기존 검색 API 호출 함수
   const searchMusic = async (query) => {
     if (!query || !query.trim()) {
       throw new Error('검색어를 입력해주세요.');
@@ -38,6 +61,114 @@ const Search = () => {
     } catch (error) {
       console.error('서버 요청 실패:', error.message);
       throw new Error(`서버 연결 실패: ${error.response?.status || 'Unknown'} - ${error.message}`);
+    }
+  };
+
+  // 좋아요 토글 함수
+  const handleLikeToggle = async (songId) => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    try {
+      const response = await apiClient.post(`/playlists/like-song/${songId}`);
+      console.log('좋아요 토글 성공:', response.data);
+      
+      setLikedSongs(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(songId)) {
+          newSet.delete(songId);
+        } else {
+          newSet.add(songId);
+        }
+        return newSet;
+      });
+      
+    } catch (error) {
+      console.error('좋아요 토글 실패:', error);
+      if (error.response?.status === 401) {
+        alert('로그인이 필요합니다.');
+      } else {
+        alert('좋아요 처리 중 오류가 발생했습니다.');
+      }
+    }
+  };
+
+  // 플레이리스트 모달 열기
+  const handleAddToPlaylist = (song) => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    setSelectedSong(song);
+    setShowPlaylistModal(true);
+    fetchPlaylists();
+  };
+
+  // 플레이리스트 목록 가져오기
+  const fetchPlaylists = async () => {
+    try {
+      const response = await apiClient.get('/playlists/my-playlists');
+      setPlaylists(response.data || response);
+    } catch (error) {
+      console.error('플레이리스트 목록 조회 실패:', error);
+      setPlaylists([]);
+    }
+  };
+
+  // 새 플레이리스트 생성
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylistName.trim()) return;
+
+    try {
+      const response = await apiClient.post('/playlists/', {
+        title: newPlaylistName.trim(),
+        description: `${selectedSong?.name}에서 생성됨`
+      });
+      
+      console.log('플레이리스트 생성 성공:', response.data);
+      setNewPlaylistName('');
+      setShowCreateForm(false);
+      await fetchPlaylists();
+      
+      if (response.data?.id) {
+        await addSongToPlaylist(response.data.id);
+      }
+      
+    } catch (error) {
+      console.error('플레이리스트 생성 실패:', error);
+      alert('플레이리스트 생성 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 플레이리스트에 노래 추가
+  const addSongToPlaylist = async (playlistId) => {
+    // 백엔드에서 song_id를 제공하므로 이를 사용
+    if (!selectedSong?.song_id) {
+      alert('노래 정보를 찾을 수 없습니다.');
+      return;
+    }
+  
+    try {
+      const response = await apiClient.post(`/playlists/${playlistId}/songs`, {
+        song_id: selectedSong.song_id // Search API에서 제공하는 song_id 사용
+      });
+      
+      console.log('노래 추가 성공:', response.data);
+      alert('플레이리스트에 추가되었습니다!');
+      setShowPlaylistModal(false);
+      
+    } catch (error) {
+      console.error('노래 추가 실패:', error);
+      if (error.response?.data?.detail?.includes('already in playlist')) {
+        alert('이미 플레이리스트에 있는 노래입니다.');
+      } else {
+        alert('플레이리스트에 추가하는 중 오류가 발생했습니다.');
+      }
     }
   };
 
@@ -239,10 +370,21 @@ const Search = () => {
                         >
                           <Play size={16} />
                         </button>
-                        <button className="result-action-btn" title="좋아요">
-                          <Heart size={16} />
+                        <button 
+                          className={`result-action-btn ${likedSongs.has(track.song_id) ? 'liked' : ''}`}
+                          onClick={() => handleLikeToggle(track.song_id)}
+                          title="좋아요"
+                        >
+                          <Heart 
+                            size={16} 
+                            fill={likedSongs.has(track.song_id) ? 'currentColor' : 'none'}
+                          />
                         </button>
-                        <button className="result-action-btn" title="플레이리스트에 추가">
+                        <button 
+                          className="result-action-btn" 
+                          onClick={() => handleAddToPlaylist(track)}
+                          title="플레이리스트에 추가"
+                        >
                           <Plus size={16} />
                         </button>
                       </div>
@@ -330,6 +472,81 @@ const Search = () => {
                 {category}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 플레이리스트 선택 모달 */}
+      {showPlaylistModal && (
+        <div className="playlist-modal-overlay" onClick={() => setShowPlaylistModal(false)}>
+          <div className="playlist-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="playlist-modal-header">
+              <h3>플레이리스트에 추가</h3>
+              <button 
+                className="close-button"
+                onClick={() => setShowPlaylistModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="playlist-modal-content">
+              <div className="selected-song-info">
+                <strong>{selectedSong?.name}</strong>
+                <span>by {selectedSong?.artists?.join(', ')}</span>
+              </div>
+              
+              {!showCreateForm && (
+                <button 
+                  className="create-playlist-button"
+                  onClick={() => setShowCreateForm(true)}
+                >
+                  <Plus size={16} />
+                  새 플레이리스트 만들기
+                </button>
+              )}
+
+              {showCreateForm && (
+                <div className="create-playlist-form">
+                  <input
+                    type="text"
+                    placeholder="플레이리스트 이름"
+                    value={newPlaylistName}
+                    onChange={(e) => setNewPlaylistName(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleCreatePlaylist()}
+                  />
+                  <div className="form-actions">
+                    <button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}>
+                      <Check size={16} />
+                      생성
+                    </button>
+                    <button onClick={() => {
+                      setShowCreateForm(false);
+                      setNewPlaylistName('');
+                    }}>
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="playlists-list">
+                {playlists.length === 0 ? (
+                  <p className="no-playlists">플레이리스트가 없습니다.</p>
+                ) : (
+                  playlists.map(playlist => (
+                    <div 
+                      key={playlist.id}
+                      className="playlist-item"
+                      onClick={() => addSongToPlaylist(playlist.id)}
+                    >
+                      <Music size={16} />
+                      <span>{playlist.title}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

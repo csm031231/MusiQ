@@ -524,3 +524,231 @@ body .layout .content-container {
     font-size: 0.875rem;
   }
 }
+
+/* 좋아요 버튼 스타일 */
+.chart-action.liked,
+.result-action-btn.liked {
+  color: #ef4444 !important;
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* 플레이리스트 모달 스타일 */
+.playlist-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.playlist-modal {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.playlist-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+
+.playlist-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.playlist-modal-content {
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.selected-song-info {
+  background: #f0f4ff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 4px solid #667eea;
+}
+
+.selected-song-info strong {
+  display: block;
+  color: #1a1a1a;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.selected-song-info span {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.create-playlist-button {
+  width: 100%;
+  padding: 12px 16px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.create-playlist-button:hover {
+  background: #5a67d8;
+}
+
+.create-playlist-form {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.create-playlist-form input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.create-playlist-form input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.form-actions button {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.form-actions button:first-child {
+  background: #667eea;
+  color: white;
+}
+
+.form-actions button:first-child:hover:not(:disabled) {
+  background: #5a67d8;
+}
+
+.form-actions button:first-child:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+.form-actions button:last-child {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.form-actions button:last-child:hover {
+  background: #e5e7eb;
+}
+
+.playlists-list {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 16px;
+}
+
+.no-playlists {
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
+  padding: 20px;
+}
+
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.playlist-item:hover {
+  background: #f0f4ff;
+  border-color: #667eea;
+}
+
+.playlist-item span {
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+  .playlist-modal {
+    width: 95%;
+    margin: 20px;
+  }
+  
+  .playlist-modal-header,
+  .playlist-modal-content {
+    padding: 16px;
+  }
+  
+  .create-playlist-form {
+    padding: 12px;
+  }
+}

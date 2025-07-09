@@ -22,8 +22,8 @@ import {
 import axios from 'axios';
 import '../styles/Sidebar.css';
 
-// API 설정 (목록 조회용만)
-const API_BASE_URL = 'http://54.180.116.4:8000'; // 로컬 테스트용
+// API 설정
+const API_BASE_URL = 'http://54.180.116.4:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -62,6 +62,16 @@ const api = {
       console.error('플레이리스트 목록 조회 실패:', error);
       throw error;
     }
+  },
+  
+  // 플레이리스트 생성 API 추가
+  createPlaylist: async (playlistData) => {
+    try {
+      return await apiClient.post('/playlists/', playlistData);
+    } catch (error) {
+      console.error('플레이리스트 생성 실패:', error);
+      throw error;
+    }
   }
 };
 
@@ -70,14 +80,15 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   
-  // 모달 상태 (디자인만)
+  // 모달 상태
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylist, setNewPlaylist] = useState({
     title: '',
     description: ''
   });
+  const [isCreating, setIsCreating] = useState(false);
 
-  // 로그인 상태 확인 및 플레이리스트 목록 조회만
+  // 로그인 상태 확인 및 플레이리스트 목록 조회
   useEffect(() => {
     const checkLoginStatus = async () => {
       const accessToken = localStorage.getItem('accessToken');
@@ -103,30 +114,87 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     // 플레이리스트 변경 이벤트 리스닝
     window.addEventListener('playlist-updated', checkLoginStatus);
     
+    // 홈에서 플레이리스트 생성 요청 이벤트 리스닝
+    const handleCreateRequest = (event) => {
+      const playlistData = event.detail;
+      if (playlistData) {
+        setNewPlaylist({
+          title: playlistData.title || '',
+          description: playlistData.description || ''
+        });
+      }
+      setShowCreateModal(true);
+    };
+    
+    window.addEventListener('create-playlist-request', handleCreateRequest);
+    
     return () => {
       window.removeEventListener('playlist-updated', checkLoginStatus);
+      window.removeEventListener('create-playlist-request', handleCreateRequest);
     };
   }, []);
 
-  // 모달에서 생성 버튼 클릭 시 - 실제 기능은 playlist 페이지에 위임
-  const handleCreatePlaylist = () => {
-    // 플레이리스트 데이터를 전역 이벤트로 전달
-    const playlistData = {
-      title: newPlaylist.title,
-      description: newPlaylist.description,
-      is_public: false
-    };
+  // 실제 플레이리스트 생성 함수
+  const handleCreatePlaylist = async () => {
+    if (!newPlaylist.title.trim()) {
+      alert('플레이리스트 제목을 입력해주세요.');
+      return;
+    }
 
-    // 커스텀 이벤트로 플레이리스트 페이지에 생성 요청
-    window.dispatchEvent(new CustomEvent('create-playlist-request', {
-      detail: playlistData
-    }));
+    if (!isLoggedIn) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
 
-    // 모달 닫기 및 플레이리스트 페이지로 이동
-    setShowCreateModal(false);
-    setNewPlaylist({ title: '', description: '' });
-    closeSidebar();
-    navigate('/my-playlists');
+    try {
+      setIsCreating(true);
+      
+      const playlistData = {
+        title: newPlaylist.title.trim(),
+        description: newPlaylist.description.trim(),
+        is_public: true
+      };
+
+      console.log('플레이리스트 생성 시도:', playlistData);
+      const createdPlaylist = await api.createPlaylist(playlistData);
+      console.log('플레이리스트 생성 성공:', createdPlaylist);
+
+      // 성공 시 목록 새로고침
+      const updatedPlaylists = await api.getMyPlaylists();
+      setPlaylists(updatedPlaylists);
+
+      // 모달 닫기 및 상태 초기화
+      setShowCreateModal(false);
+      setNewPlaylist({ title: '', description: '' });
+      
+      // 전역 이벤트 발생 (다른 컴포넌트 업데이트용)
+      window.dispatchEvent(new Event('playlist-updated'));
+      
+      // 생성된 플레이리스트로 이동
+      navigate(`/playlists/${createdPlaylist.id}`);
+      closeSidebar();
+
+    } catch (error) {
+      console.error('플레이리스트 생성 중 오류:', error);
+      
+      if (error.response?.status === 401) {
+        alert('로그인이 필요합니다.');
+        setIsLoggedIn(false);
+      } else {
+        alert('플레이리스트 생성 중 오류가 발생했습니다.');
+      }
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  // 플러스 버튼 클릭 시
+  const handlePlusClick = () => {
+    if (!isLoggedIn) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    setShowCreateModal(true);
   };
   
   // 파일 업로드 처리
@@ -144,7 +212,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     }
   };
   
-  // 기본 메뉴 항목 - 순서 변경 및 추천 플레이리스트 제거
+  // 기본 메뉴 항목
   const menuItems = [
     { to: '/', icon: <Home size={20} />, label: '홈' },
     { to: '/chart', icon: <BarChart2 size={20} />, label: '인기차트' },
@@ -159,7 +227,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     },
   ];
 
-  // 로그인한 사용자를 위한 기타 메뉴 항목 - 좋아요 표시한 음악만
+  // 로그인한 사용자를 위한 기타 메뉴 항목
   const otherUserItems = [
     { to: '/liked-songs', icon: <ThumbsUp size={20} />, label: '좋아요 표시한 음악' },
   ];
@@ -232,7 +300,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
           {/* 내 플레이리스트 헤더 */}
           <div className="playlist-header">     
               <NavLink 
-                to="/my-playlists" 
+                to="/playlists" 
                 className={({ isActive }) => 
                   isActive ? 'playlist-link active' : 'playlist-link'
                 }
@@ -242,10 +310,10 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
                 <span>최근에 만든 플레이리스트</span>
               </NavLink>
               
-              {/* 플러스 버튼 - 모달만 오픈 */}
+              {/* 플러스 버튼 */}
               <button 
                 className="create-playlist-btn"
-                onClick={() => setShowCreateModal(true)}
+                onClick={handlePlusClick}
                 title="새 플레이리스트 만들기"
               >
                 <Plus size={16} />
@@ -288,7 +356,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
         />
       </aside>
 
-      {/* 전체화면 모달 - 디자인만, 실제 기능은 playlist 페이지에서 처리 */}
+      {/* 전체화면 모달 - 실제 생성 기능 포함 */}
       {showCreateModal && (
         <div className="fullscreen-modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="fullscreen-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -312,6 +380,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
                     placeholder="재생목록의 제목을 입력하세요"
                     value={newPlaylist.title}
                     onChange={(e) => setNewPlaylist(prev => ({ ...prev, title: e.target.value }))}
+                    disabled={isCreating}
                   />
                 </div>
                 
@@ -323,6 +392,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
                     value={newPlaylist.description}
                     onChange={(e) => setNewPlaylist(prev => ({ ...prev, description: e.target.value }))}
                     rows="4"
+                    disabled={isCreating}
                   />
                 </div>
               </div>
@@ -332,15 +402,16 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
               <button 
                 className="cancel-button"
                 onClick={() => setShowCreateModal(false)}
+                disabled={isCreating}
               >
                 취소
               </button>
               <button 
                 className="create-button"
                 onClick={handleCreatePlaylist}
-                disabled={!newPlaylist.title.trim()}
+                disabled={!newPlaylist.title.trim() || isCreating}
               >
-                만들기
+                {isCreating ? '만드는 중...' : '만들기'}
               </button>
             </div>
           </div>
@@ -349,4 +420,5 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     </>
   );
 };
+
 export default Sidebar;

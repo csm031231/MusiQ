@@ -6,6 +6,7 @@ from core.config import get_config
 from core.database import provide_session
 from Api.spotify_service import get_spotify_token, get_spotify_image
 from Api.crud import save_track_to_db
+from typing import Optional
 from Api.dto import ChartResponse, SearchResponse
 
 router = APIRouter(
@@ -18,7 +19,7 @@ config = get_config()
 @router.get("/chartPage")
 async def getTop100(db: AsyncSession = Depends(provide_session)):
     """
-    Last.fm 차트 100곡 가져오기 + Spotify 이미지 포함
+    Last.fm 차트 100곡 가져오기 + Spotify 상세 정보 포함
     """
     URL = 'http://ws.audioscrobbler.com/2.0/'
 
@@ -40,33 +41,44 @@ async def getTop100(db: AsyncSession = Depends(provide_session)):
         tracks = data['tracks']['track']
         track_list = []
         
-        print(f"Last.fm 차트 {len(tracks)}곡 가져오기 완료, Spotify 이미지 검색 시작...")
+        print(f"Last.fm 차트 {len(tracks)}곡 가져오기 완료, Spotify 상세 정보 검색 시작...")
         
-        # 2. 각 트랙에 대해 Spotify 이미지 가져오기
+        # 2. 각 트랙에 대해 Spotify 상세 정보 가져오기
         for i, track in enumerate(tracks, start=1):
             track_name = track.get('name')
             artist_name = track.get('artist', {}).get('name')
             
-            # Spotify 이미지 가져오기 (무조건 Spotify만 사용)
-            spotify_image = None
-            if track_name and artist_name:
-                spotify_image = get_spotify_image(track_name, artist_name)
-                if spotify_image:
-                    print(f"✓ {i}/100 - {track_name} (Spotify 이미지 찾음)")
-                else:
-                    print(f"✗ {i}/100 - {track_name} (Spotify 이미지 없음)")
+            # Spotify에서 상세 정보 가져오기 (이미지 + 시간 + 앨범 정보)
+            spotify_details = get_spotify_track_details_sync(track_name, artist_name)
             
-            # 추가: DB에 저장할 트랙 데이터 준비 (좋아요/플레이리스트 기능용)
+            spotify_image = None
+            duration_ms = None
+            preview_url = None
+            album_name = None
+            
+            if spotify_details:
+                spotify_image = spotify_details.get('album_image')
+                duration_ms = spotify_details.get('duration_ms')
+                preview_url = spotify_details.get('preview_url')
+                album_name = spotify_details.get('album_name')
+                print(f"✓ {i}/100 - {track_name} (Spotify 상세 정보 찾음)")
+            else:
+                print(f"✗ {i}/100 - {track_name} (Spotify 정보 없음)")
+            
+            # DB에 저장할 트랙 데이터 준비 (상세 정보 포함)
             track_data_for_db = {
                 'title': track_name,
                 'artist': artist_name,
+                'album': album_name,  # 앨범 정보 추가
+                'duration_ms': duration_ms,  # 재생 시간 추가
+                'preview_url': preview_url,  # 미리듣기 URL 추가
                 'image_small': spotify_image,
                 'playcount': track.get('playcount'),
                 'listeners': track.get('listeners'),
                 'url': track.get('url')
             }
             
-            # 추가: DB에 저장하여 song_id 생성
+            # DB에 저장하여 song_id 생성
             song_id = await save_track_to_db(db, track_data_for_db, "lastfm")
             
             track_info = {
@@ -76,12 +88,14 @@ async def getTop100(db: AsyncSession = Depends(provide_session)):
                 'listeners': track.get('listeners'),
                 'mbid': track.get('mbid'),
                 'url': track.get('url'),
-                'song_id': song_id,  # 추가: 좋아요/플레이리스트 기능을 위한 DB song_id
+                'song_id': song_id,
                 'artist': {
                     'name': artist_name,
                     'mbid': track.get('artist', {}).get('mbid'),
                     'url': track.get('artist', {}).get('url')
                 },
+                'album': album_name,  # 앨범 정보 추가
+                'duration_ms': duration_ms,  # 재생 시간 추가
                 'image_small': spotify_image,
                 'image_source': 'spotify' if spotify_image else None
             }
@@ -98,6 +112,58 @@ async def getTop100(db: AsyncSession = Depends(provide_session)):
     except Exception as e:
         print(f"Error in getTop100: {str(e)}")
         return {"error": f"Failed to fetch chart data: {str(e)}"}
+
+def get_spotify_track_details_sync(track_name: str, artist_name: str) -> Optional[dict]:
+    """Spotify에서 트랙 상세 정보 가져오기 (동기 버전)"""
+    try:
+        access_token = get_spotify_token()
+        
+        search_url = 'https://api.spotify.com/v1/search'
+        headers = {
+            'Authorization': f'Bearer {access_token}'
+        }
+        
+        query = f'track:"{track_name}" artist:"{artist_name}"'
+        params = {
+            'q': query,
+            'type': 'track',
+            'limit': 1,
+        }
+        
+        response = requests.get(search_url, headers=headers, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            tracks = data.get('tracks', {}).get('items', [])
+            
+            if tracks:
+                track = tracks[0]
+                album = track.get('album', {})
+                
+                # 중간 크기 이미지 우선 선택
+                album_images = album.get('images', [])
+                album_image = None
+                if album_images:
+                    for img in album_images:
+                        if img.get('height') == 300:
+                            album_image = img.get('url')
+                            break
+                    if not album_image:
+                        album_image = album_images[0].get('url')
+                
+                return {
+                    'spotify_id': track.get('id'),
+                    'duration_ms': track.get('duration_ms'),
+                    'preview_url': track.get('preview_url'),
+                    'album_name': album.get('name'),
+                    'album_image': album_image
+                }
+        
+        return None
+                        
+    except Exception as e:
+        print(f"Error fetching Spotify details for {track_name} - {artist_name}: {str(e)}")
+        return None
 
 @router.post("/searchPage")
 async def search_result(query: str, db: AsyncSession = Depends(provide_session)):
