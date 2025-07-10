@@ -353,8 +353,15 @@ async def add_song_to_playlist(
 ):
     """플레이리스트에 노래 추가"""
     try:
-        logger.info(f"플레이리스트 {playlist_id}에 노래 {song_data.song_id} 추가 시도")
-        
+        logger.info(f"플레이리스트 {playlist_id}에 노래 추가 시도: {song_data.song_id}")
+
+        # 0. song_id 유효성 사전 검사
+        if not isinstance(song_data.song_id, int) or song_data.song_id <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="올바르지 않은 song_id입니다 (양의 정수여야 함)"
+            )
+
         # 1. 플레이리스트 권한 확인
         playlist_result = await db.execute(
             select(Playlist).where(
@@ -364,28 +371,24 @@ async def add_song_to_playlist(
                 )
             )
         )
-        
         playlist = playlist_result.scalars().first()
         if not playlist:
-            logger.warning(f"플레이리스트 {playlist_id} 권한 없음")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Playlist not found or you don't have permission to modify it"
+                detail="해당 플레이리스트가 없거나 수정 권한이 없습니다."
             )
-        
+
         # 2. 노래 존재 확인
         song_result = await db.execute(
             select(Song).where(Song.id == song_data.song_id)
         )
-        
         song = song_result.scalars().first()
         if not song:
-            logger.warning(f"노래 {song_data.song_id} 찾을 수 없음")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Song not found"
+                detail="해당 노래(song_id)를 찾을 수 없습니다."
             )
-        
+
         # 3. 중복 확인
         existing_result = await db.execute(
             select(PlaylistSong).where(
@@ -395,21 +398,19 @@ async def add_song_to_playlist(
                 )
             )
         )
-        
         if existing_result.scalars().first():
-            logger.warning(f"노래 {song_data.song_id}는 이미 플레이리스트 {playlist_id}에 존재")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Song already exists in playlist"
+                detail="이미 이 플레이리스트에 추가된 노래입니다."
             )
-        
+
         # 4. 다음 position 계산
         max_position_result = await db.execute(
             select(func.coalesce(func.max(PlaylistSong.position), 0))
             .where(PlaylistSong.playlist_id == playlist_id)
         )
         max_position = max_position_result.scalar() or 0
-        
+
         # 5. 노래 추가
         new_playlist_song = PlaylistSong(
             playlist_id=playlist_id,
@@ -417,28 +418,36 @@ async def add_song_to_playlist(
             position=max_position + 1,
             added_at=datetime.utcnow()
         )
-        
+
         db.add(new_playlist_song)
         await db.commit()
-        
-        logger.info(f"노래 추가 성공: {song_data.song_id} -> 플레이리스트 {playlist_id}, position: {max_position + 1}")
-        
+
+        logger.info(f"노래 추가 성공: playlist_id={playlist_id}, song_id={song_data.song_id}, position={max_position + 1}")
+
         return {
             "success": True,
-            "message": "Song added to playlist successfully",
+            "message": "플레이리스트에 노래가 추가되었습니다.",
             "song_id": song_data.song_id,
             "position": max_position + 1
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         await db.rollback()
-        logger.error(f"노래 추가 중 오류: {str(e)}")
+        logger.error(f"노래 추가 중 예외 발생: playlist_id={playlist_id}, song_id={song_data.song_id}, error={str(e)}")
         traceback.print_exc()
+
+        # foreign key 오류 등 상세한 안내 제공
+        if "foreign key" in str(e).lower() or "violates foreign key constraint" in str(e).lower():
+            raise HTTPException(
+                status_code=400,
+                detail="데이터베이스 무결성 오류: 유효하지 않은 song_id이거나 데이터가 DB에 저장되지 않았습니다."
+            )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"노래 추가 중 오류가 발생했습니다: {str(e)}"
+            detail="노래 추가 중 서버 내부 오류가 발생했습니다."
         )
 
 # 플레이리스트에서 노래 삭제
