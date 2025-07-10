@@ -21,6 +21,7 @@ const Home = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
+  const [playlistStats, setPlaylistStats] = useState({}); // 플레이리스트 통계 정보
 
   // API 클라이언트 설정
   const apiClient = axios.create({
@@ -37,6 +38,68 @@ const Home = () => {
     return config;
   });
 
+  // 시간 포맷팅 함수 (PlaylistDetail과 동일)
+  const formatDuration = (duration) => {
+    if (!duration) return 0;
+    
+    let totalSeconds;
+    
+    // 1. 밀리초인 경우 (duration_ms)
+    if (duration > 10000) {
+      totalSeconds = Math.floor(duration / 1000);
+    }
+    // 2. 이미 초 단위인 경우
+    else if (typeof duration === 'number') {
+      totalSeconds = duration;
+    }
+    // 3. 문자열 숫자인 경우
+    else if (typeof duration === 'string') {
+      const num = parseInt(duration);
+      totalSeconds = num > 10000 ? Math.floor(num / 1000) : num;
+    }
+    else {
+      return 0;
+    }
+    
+    return totalSeconds;
+  };
+
+  // 총 재생 시간을 문자열로 변환
+  const formatTotalDuration = (totalSeconds) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}시간 ${minutes}분`;
+    }
+    return `${minutes}분`;
+  };
+
+  // 각 플레이리스트의 통계 정보 로드
+  const loadPlaylistStats = async (playlistId) => {
+    try {
+      const response = await apiClient.get(`/playlists/${playlistId}/songs`);
+      const songs = response.data || response;
+      
+      const songCount = songs.length;
+      const totalDurationSeconds = songs.reduce((total, song) => {
+        const duration = song.duration_ms || song.duration || song.length || 0;
+        return total + formatDuration(duration);
+      }, 0);
+      
+      return {
+        songCount,
+        totalDuration: totalDurationSeconds > 0 ? formatTotalDuration(totalDurationSeconds) : '0분'
+      };
+    } catch (error) {
+      console.error(`플레이리스트 ${playlistId} 통계 로드 실패:`, error);
+      return {
+        songCount: 0,
+        totalDuration: '0분'
+      };
+    }
+  };
+
   // 로그인 상태 확인 및 플레이리스트 로드
   useEffect(() => {
     const checkLoginAndLoadPlaylists = async () => {
@@ -47,7 +110,26 @@ const Home = () => {
         try {
           setPlaylistsLoading(true);
           const response = await apiClient.get('/playlists/my-playlists');
-          setPlaylists(response.data || response || []);
+          const playlistsData = response.data || response || [];
+          setPlaylists(playlistsData);
+          
+          // 각 플레이리스트의 통계 정보 로드
+          const statsPromises = playlistsData.map(async (playlist) => {
+            const stats = await loadPlaylistStats(playlist.id);
+            return { id: playlist.id, ...stats };
+          });
+          
+          const statsResults = await Promise.all(statsPromises);
+          const statsMap = {};
+          statsResults.forEach(stat => {
+            statsMap[stat.id] = {
+              songCount: stat.songCount,
+              totalDuration: stat.totalDuration
+            };
+          });
+          
+          setPlaylistStats(statsMap);
+          
         } catch (error) {
           console.error('플레이리스트 로드 실패:', error);
           setPlaylists([]);
@@ -57,6 +139,7 @@ const Home = () => {
       } else {
         setPlaylistsLoading(false);
         setPlaylists([]);
+        setPlaylistStats({});
       }
     };
 
@@ -354,35 +437,43 @@ const Home = () => {
               </div>
             ) : (
               <>
-                {playlists.slice(0, 4).map((playlist, index) => (
-                  <div 
-                    key={playlist.id} 
-                    className="playlist-item"
-                    onClick={() => navigate(`/playlists/${playlist.id}`)}
-                    style={{ cursor: 'pointer' }}
-                  >
+                {playlists.slice(0, 4).map((playlist, index) => {
+                  const stats = playlistStats[playlist.id] || { songCount: 0, totalDuration: '0분' };
+                  
+                  return (
                     <div 
-                      className="playlist-thumbnail" 
-                      style={{ 
-                        background: `linear-gradient(45deg, #a8e6cf, #a8e6cf90)`,
-                        color: 'white'
-                      }}
+                      key={playlist.id} 
+                      className="playlist-item"
+                      onClick={() => navigate(`/playlists/${playlist.id}`)}
+                      style={{ cursor: 'pointer' }}
                     >
-                      <Music size={20} />
-                    </div>
-                    <div className="playlist-info">
-                      <h3 className="playlist-title">{playlist.title}</h3>
-                      <p className="playlist-description">
-                        {playlist.description || '사용자 플레이리스트'}
-                      </p>
-                      <div className="playlist-stats">
-                        <span>0곡</span>
-                        <span>•</span>
-                        <span>방금 전</span>
+                      <div 
+                        className="playlist-thumbnail" 
+                        style={{ 
+                          background: `linear-gradient(45deg, #a8e6cf, #a8e6cf90)`,
+                          color: 'white'
+                        }}
+                      >
+                        <Music size={20} />
+                      </div>
+                      <div className="playlist-info">
+                        <h3 className="playlist-title">{playlist.title}</h3>
+                        <p className="playlist-description">
+                          {playlist.description || '사용자 플레이리스트'}
+                        </p>
+                        <div className="playlist-stats">
+                          <span>{stats.songCount}곡</span>
+                          {stats.songCount > 0 && (
+                            <>
+                              <span>•</span>
+                              <span>{stats.totalDuration}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {playlists.length > 4 && (
                   <div style={{ textAlign: 'center', padding: '12px 0' }}>
                     <Link 

@@ -48,7 +48,8 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('accessToken');
-      window.location.href = '/login';
+      // 강제 새로고침 대신 이벤트 발생
+      window.dispatchEvent(new Event('login-status-change'));
     }
     return Promise.reject(error);
   }
@@ -88,34 +89,60 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
   });
   const [isCreating, setIsCreating] = useState(false);
 
-  // 로그인 상태 확인 및 플레이리스트 목록 조회
-  useEffect(() => {
-    const checkLoginStatus = async () => {
-      const accessToken = localStorage.getItem('accessToken');
-      setIsLoggedIn(!!accessToken);
-      
-      if (accessToken) {
-        try {
-          const playlistsData = await api.getMyPlaylists();
-          setPlaylists(playlistsData);
-        } catch (error) {
-          console.error('플레이리스트 로드 실패:', error);
-          if (error.response?.status !== 401) {
-            setPlaylists([]);
-          }
+  // 로그인 상태 확인 함수
+  const checkLoginStatus = () => {
+    const accessToken = localStorage.getItem('accessToken');
+    const loggedIn = !!accessToken;
+    console.log('로그인 상태 확인:', { accessToken: !!accessToken, loggedIn });
+    setIsLoggedIn(loggedIn);
+    return loggedIn;
+  };
+
+  // 플레이리스트 목록 로드 함수
+  const loadPlaylists = async () => {
+    const loggedIn = checkLoginStatus();
+    
+    if (loggedIn) {
+      try {
+        console.log('플레이리스트 목록 로드 시도...');
+        const playlistsData = await api.getMyPlaylists();
+        console.log('플레이리스트 로드 성공:', playlistsData);
+        setPlaylists(playlistsData);
+      } catch (error) {
+        console.error('플레이리스트 로드 실패:', error);
+        if (error.response?.status === 401) {
+          console.log('401 에러 - 로그인 상태 재설정');
+          setIsLoggedIn(false);
+          localStorage.removeItem('accessToken');
         }
-      } else {
         setPlaylists([]);
       }
+    } else {
+      console.log('로그인되지 않음 - 플레이리스트 초기화');
+      setPlaylists([]);
+    }
+  };
+
+  // 로그인 상태 확인 및 플레이리스트 목록 조회
+  useEffect(() => {
+    console.log('Sidebar useEffect 실행');
+    loadPlaylists();
+    
+    // 로그인 상태 변경 이벤트 리스닝
+    const handleLoginStatusChange = () => {
+      console.log('로그인 상태 변경 이벤트 감지');
+      loadPlaylists();
     };
-    
-    checkLoginStatus();
-    
-    // 플레이리스트 변경 이벤트 리스닝
-    window.addEventListener('playlist-updated', checkLoginStatus);
+
+    // 플레이리스트 업데이트 이벤트 리스닝
+    const handlePlaylistUpdate = () => {
+      console.log('플레이리스트 업데이트 이벤트 감지');
+      loadPlaylists();
+    };
     
     // 홈에서 플레이리스트 생성 요청 이벤트 리스닝
     const handleCreateRequest = (event) => {
+      console.log('플레이리스트 생성 요청 이벤트 감지:', event.detail);
       const playlistData = event.detail;
       if (playlistData) {
         setNewPlaylist({
@@ -126,23 +153,35 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       setShowCreateModal(true);
     };
     
+    window.addEventListener('login-status-change', handleLoginStatusChange);
+    window.addEventListener('playlist-updated', handlePlaylistUpdate);
     window.addEventListener('create-playlist-request', handleCreateRequest);
     
     return () => {
-      window.removeEventListener('playlist-updated', checkLoginStatus);
+      window.removeEventListener('login-status-change', handleLoginStatusChange);
+      window.removeEventListener('playlist-updated', handlePlaylistUpdate);
       window.removeEventListener('create-playlist-request', handleCreateRequest);
     };
   }, []);
 
   // 실제 플레이리스트 생성 함수
   const handleCreatePlaylist = async () => {
+    console.log('플레이리스트 생성 시도:', { 
+      title: newPlaylist.title, 
+      isLoggedIn, 
+      hasToken: !!localStorage.getItem('accessToken') 
+    });
+
     if (!newPlaylist.title.trim()) {
       alert('플레이리스트 제목을 입력해주세요.');
       return;
     }
 
-    if (!isLoggedIn) {
+    // 실시간으로 로그인 상태 재확인
+    const currentlyLoggedIn = checkLoginStatus();
+    if (!currentlyLoggedIn) {
       alert('로그인이 필요합니다.');
+      console.log('로그인 상태 확인 실패');
       return;
     }
 
@@ -155,13 +194,12 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
         is_public: true
       };
 
-      console.log('플레이리스트 생성 시도:', playlistData);
+      console.log('플레이리스트 생성 API 호출:', playlistData);
       const createdPlaylist = await api.createPlaylist(playlistData);
       console.log('플레이리스트 생성 성공:', createdPlaylist);
 
       // 성공 시 목록 새로고침
-      const updatedPlaylists = await api.getMyPlaylists();
-      setPlaylists(updatedPlaylists);
+      await loadPlaylists();
 
       // 모달 닫기 및 상태 초기화
       setShowCreateModal(false);
@@ -180,6 +218,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       if (error.response?.status === 401) {
         alert('로그인이 필요합니다.');
         setIsLoggedIn(false);
+        localStorage.removeItem('accessToken');
       } else {
         alert('플레이리스트 생성 중 오류가 발생했습니다.');
       }
@@ -190,7 +229,14 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
 
   // 플러스 버튼 클릭 시
   const handlePlusClick = () => {
-    if (!isLoggedIn) {
+    console.log('플러스 버튼 클릭:', { 
+      isLoggedIn, 
+      hasToken: !!localStorage.getItem('accessToken') 
+    });
+
+    // 실시간으로 로그인 상태 재확인
+    const currentlyLoggedIn = checkLoginStatus();
+    if (!currentlyLoggedIn) {
       alert('로그인이 필요합니다.');
       return;
     }

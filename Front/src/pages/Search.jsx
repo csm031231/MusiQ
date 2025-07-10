@@ -19,9 +19,11 @@ const Search = () => {
   const [likedSongs, setLikedSongs] = useState(new Set());
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [selectedSong, setSelectedSong] = useState(null);
+  const [selectedAlbum, setSelectedAlbum] = useState(null); // 앨범 선택 상태 추가
   const [playlists, setPlaylists] = useState([]);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isAddingAlbum, setIsAddingAlbum] = useState(false); // 앨범 추가 진행 상태
 
   // API 클라이언트 설정
   const apiClient = axios.create({
@@ -64,6 +66,27 @@ const Search = () => {
     }
   };
 
+  // 앨범 트랙 목록 가져오기 API
+  const getAlbumTracks = async (albumId) => {
+    try {
+      console.log(`앨범 트랙 조회 시작: ${albumId}`);
+      const response = await axios.get(`http://54.180.116.4:8000/api/album/${albumId}/tracks`, {
+        timeout: 10000,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+      
+      console.log('앨범 트랙 조회 성공:', response.data);
+      return response.data.tracks || [];
+      
+    } catch (error) {
+      console.error('앨범 트랙 조회 실패:', error);
+      throw new Error('앨범 트랙을 가져오는 중 오류가 발생했습니다.');
+    }
+  };
+
   // 좋아요 토글 함수
   const handleLikeToggle = async (songId) => {
     const token = localStorage.getItem('accessToken');
@@ -96,7 +119,7 @@ const Search = () => {
     }
   };
 
-  // 플레이리스트 모달 열기
+  // 트랙을 플레이리스트에 추가하는 모달 열기
   const handleAddToPlaylist = (song) => {
     const token = localStorage.getItem('accessToken');
     if (!token) {
@@ -105,6 +128,21 @@ const Search = () => {
     }
 
     setSelectedSong(song);
+    setSelectedAlbum(null); // 트랙 추가 시 앨범 선택 초기화
+    setShowPlaylistModal(true);
+    fetchPlaylists();
+  };
+
+  // 앨범을 플레이리스트에 추가하는 모달 열기
+  const handleAddAlbumToPlaylist = (album) => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    setSelectedAlbum(album);
+    setSelectedSong(null); // 앨범 추가 시 트랙 선택 초기화
     setShowPlaylistModal(true);
     fetchPlaylists();
   };
@@ -125,9 +163,10 @@ const Search = () => {
     if (!newPlaylistName.trim()) return;
 
     try {
+      const itemName = selectedSong?.name || selectedAlbum?.name;
       const response = await apiClient.post('/playlists/', {
         title: newPlaylistName.trim(),
-        description: `${selectedSong?.name}에서 생성됨`
+        description: `${itemName}에서 생성됨`
       });
       
       console.log('플레이리스트 생성 성공:', response.data);
@@ -136,7 +175,11 @@ const Search = () => {
       await fetchPlaylists();
       
       if (response.data?.id) {
-        await addSongToPlaylist(response.data.id);
+        if (selectedSong) {
+          await addSongToPlaylist(response.data.id);
+        } else if (selectedAlbum) {
+          await addAlbumToPlaylist(response.data.id);
+        }
       }
       
     } catch (error) {
@@ -169,6 +212,72 @@ const Search = () => {
       } else {
         alert('플레이리스트에 추가하는 중 오류가 발생했습니다.');
       }
+    }
+  };
+
+  // 플레이리스트에 앨범 추가 (앨범의 모든 트랙 추가)
+  const addAlbumToPlaylist = async (playlistId) => {
+    if (!selectedAlbum?.id) {
+      alert('앨범 정보를 찾을 수 없습니다.');
+      return;
+    }
+
+    try {
+      setIsAddingAlbum(true);
+      
+      // 1. 앨범의 트랙 목록 가져오기
+      console.log('앨범 트랙 목록 조회 중...');
+      const tracks = await getAlbumTracks(selectedAlbum.id);
+      
+      if (!tracks || tracks.length === 0) {
+        alert('앨범에 트랙이 없습니다.');
+        return;
+      }
+
+      console.log(`앨범 "${selectedAlbum.name}"의 ${tracks.length}개 트랙을 플레이리스트에 추가 중...`);
+      
+      // 2. 각 트랙을 플레이리스트에 추가
+      let successCount = 0;
+      let skipCount = 0;
+      
+      for (const track of tracks) {
+        try {
+          if (track.song_id) {
+            await apiClient.post(`/playlists/${playlistId}/songs`, {
+              song_id: track.song_id
+            });
+            successCount++;
+          }
+        } catch (error) {
+          if (error.response?.data?.detail?.includes('already in playlist')) {
+            skipCount++;
+            console.log(`트랙 "${track.name}"은 이미 플레이리스트에 있습니다.`);
+          } else {
+            console.error(`트랙 "${track.name}" 추가 실패:`, error);
+          }
+        }
+      }
+      
+      // 3. 결과 메시지 표시
+      if (successCount > 0) {
+        let message = `앨범 "${selectedAlbum.name}"의 ${successCount}곡이 플레이리스트에 추가되었습니다!`;
+        if (skipCount > 0) {
+          message += `\n(${skipCount}곡은 이미 플레이리스트에 있어서 건너뛰었습니다.)`;
+        }
+        alert(message);
+      } else if (skipCount > 0) {
+        alert('모든 트랙이 이미 플레이리스트에 있습니다.');
+      } else {
+        alert('앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
+      }
+      
+      setShowPlaylistModal(false);
+      
+    } catch (error) {
+      console.error('앨범 추가 실패:', error);
+      alert(error.message || '앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
+    } finally {
+      setIsAddingAlbum(false);
     }
   };
 
@@ -329,7 +438,11 @@ const Search = () => {
                         <button className="result-action-btn" title="좋아요">
                           <Heart size={16} />
                         </button>
-                        <button className="result-action-btn" title="플레이리스트에 추가">
+                        <button 
+                          className="result-action-btn" 
+                          onClick={() => handleAddAlbumToPlaylist(album)}
+                          title="앨범을 플레이리스트에 추가"
+                        >
                           <Plus size={16} />
                         </button>
                       </div>
@@ -492,8 +605,18 @@ const Search = () => {
             
             <div className="playlist-modal-content">
               <div className="selected-song-info">
-                <strong>{selectedSong?.name}</strong>
-                <span>by {selectedSong?.artists?.join(', ')}</span>
+                {selectedSong && (
+                  <>
+                    <strong>{selectedSong.name}</strong>
+                    <span>by {selectedSong.artists?.join(', ')}</span>
+                  </>
+                )}
+                {selectedAlbum && (
+                  <>
+                    <strong>{selectedAlbum.name} (앨범)</strong>
+                    <span>by {selectedAlbum.artists?.join(', ')} • {selectedAlbum.total_tracks}곡</span>
+                  </>
+                )}
               </div>
               
               {!showCreateForm && (
@@ -538,10 +661,19 @@ const Search = () => {
                     <div 
                       key={playlist.id}
                       className="playlist-item"
-                      onClick={() => addSongToPlaylist(playlist.id)}
+                      onClick={() => {
+                        if (selectedSong) {
+                          addSongToPlaylist(playlist.id);
+                        } else if (selectedAlbum) {
+                          addAlbumToPlaylist(playlist.id);
+                        }
+                      }}
                     >
                       <Music size={16} />
                       <span>{playlist.title}</span>
+                      {isAddingAlbum && selectedAlbum && (
+                        <span className="adding-indicator">추가 중...</span>
+                      )}
                     </div>
                   ))
                 )}

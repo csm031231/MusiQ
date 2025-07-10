@@ -91,17 +91,24 @@ class Playlist(Base):
     
     # 관계 정의
     user = relationship("User", back_populates="playlists")
-    songs = relationship("PlaylistSong", back_populates="playlist")
+    playlist_songs = relationship("PlaylistSong", back_populates="playlist")
 
 class PlaylistSong(Base):
     __tablename__ = "playlist_songs"
     
-    playlist_id = Column(Integer, ForeignKey("playlists.id"), primary_key=True)
-    song_id = Column(Integer, ForeignKey("songs.id"), primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)  # 기본키 추가
+    playlist_id = Column(Integer, ForeignKey("playlists.id"), nullable=False)
+    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
+    position = Column(Integer, nullable=False, default=0)  # 순서 추가
     added_at = Column(DateTime(timezone=True), server_default=func.now())
     
+    # 앨범 그룹 정보 추가
+    album_group_id = Column(String(255), nullable=True, index=True)  # 앨범 그룹 식별자
+    album_group_name = Column(String(255), nullable=True)  # 앨범 이름
+    is_album_group = Column(Boolean, default=False)  # 앨범 그룹 여부
+    
     # 관계 정의
-    playlist = relationship("Playlist", back_populates="songs")
+    playlist = relationship("Playlist", back_populates="playlist_songs")
     song = relationship("Song", back_populates="playlists")
 
 class UserLikedSong(Base):
@@ -146,4 +153,3 @@ class RecommendedSong(Base):
     user = relationship("User", backref="recommended_songs")
     artist = relationship("Artist", backref="recommended_songs_to_users")
     song = relationship("Song", backref="recommended_to_users")
-

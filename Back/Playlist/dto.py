@@ -44,3 +44,7 @@ class PlaylistSongResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        
+# 앨범 추가를 위한 DTO
+class AlbumAddToPlaylist(BaseModel):
+    album_id: str

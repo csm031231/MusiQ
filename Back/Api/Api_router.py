@@ -272,3 +272,115 @@ async def search_result(query: str, db: AsyncSession = Depends(provide_session))
     else:
         error_message = f"Error: {response.status_code}, {response.text}"
         return error_message
+
+# 🆕 새로 추가: 앨범 트랙 조회 API
+@router.get("/album/{album_id}/tracks")
+async def get_album_tracks(album_id: str, db: AsyncSession = Depends(provide_session)):
+    """
+    Spotify 앨범의 모든 트랙 가져오기 + DB 저장
+    """
+    try:
+        access_token = get_spotify_token()
+        
+        # 1. Spotify에서 앨범 트랙 목록 가져오기
+        tracks_url = f'https://api.spotify.com/v1/albums/{album_id}/tracks'
+        headers = {
+            'Authorization': f'Bearer {access_token}'
+        }
+        
+        # 모든 트랙을 가져오기 위해 limit을 50으로 설정하고 필요시 페이징
+        params = {
+            'limit': 50,
+            'offset': 0
+        }
+        
+        all_tracks = []
+        
+        while True:
+            response = requests.get(tracks_url, headers=headers, params=params, timeout=10)
+            
+            if response.status_code != 200:
+                return {"error": f"Spotify API error: {response.status_code} - {response.text}"}
+            
+            data = response.json()
+            tracks = data.get('items', [])
+            all_tracks.extend(tracks)
+            
+            # 다음 페이지가 있는지 확인
+            if not data.get('next'):
+                break
+                
+            params['offset'] += 50
+        
+        print(f"앨범 {album_id}에서 총 {len(all_tracks)}개 트랙 발견")
+        
+        # 2. 앨범 정보도 가져오기 (그룹화를 위해)
+        album_url = f'https://api.spotify.com/v1/albums/{album_id}'
+        album_response = requests.get(album_url, headers=headers, timeout=10)
+        
+        album_info = {}
+        if album_response.status_code == 200:
+            album_data = album_response.json()
+            album_info = {
+                'id': album_data.get('id'),
+                'name': album_data.get('name'),
+                'artists': [artist.get('name') for artist in album_data.get('artists', [])],
+                'release_date': album_data.get('release_date'),
+                'total_tracks': album_data.get('total_tracks'),
+                'image': album_data.get('images', [{}])[0].get('url') if album_data.get('images') else None
+            }
+        
+        # 3. 각 트랙을 DB에 저장하고 song_id 생성
+        track_list = []
+        
+        for i, track in enumerate(all_tracks, 1):
+            track_name = track.get('name')
+            artists = track.get('artists', [])
+            artist_name = artists[0].get('name') if artists else None
+            
+            if not track_name or not artist_name:
+                continue
+            
+            # 트랙 상세 정보 구성
+            track_data_for_db = {
+                'title': track_name,
+                'artist': artist_name,
+                'album': album_info.get('name'),
+                'duration_ms': track.get('duration_ms'),
+                'preview_url': track.get('preview_url'),
+                'spotify_id': track.get('id'),
+                'track_number': track.get('track_number'),  # 트랙 번호 추가
+                'disc_number': track.get('disc_number', 1),  # 디스크 번호 추가
+                'image_small': album_info.get('image')
+            }
+            
+            # DB에 저장하여 song_id 생성
+            song_id = await save_track_to_db(db, track_data_for_db, "spotify")
+            
+            if song_id:
+                track_info = {
+                    'spotify_id': track.get('id'),
+                    'song_id': song_id,
+                    'name': track_name,
+                    'artists': [artist.get('name') for artist in artists],
+                    'duration_ms': track.get('duration_ms'),
+                    'preview_url': track.get('preview_url'),
+                    'track_number': track.get('track_number'),
+                    'disc_number': track.get('disc_number', 1),
+                    'url': track.get('external_urls', {}).get('spotify'),
+                    'album_info': album_info  # 앨범 정보 포함
+                }
+                track_list.append(track_info)
+        
+        print(f"DB 저장 완료: {len(track_list)}개 트랙")
+        
+        return {
+            "album": album_info,
+            "tracks": track_list,
+            "total_tracks": len(track_list),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"Error in get_album_tracks: {str(e)}")
+        return {"error": f"Failed to fetch album tracks: {str(e)}"}

@@ -79,6 +79,43 @@ apiClient.interceptors.response.use(
   }
 );
 
+// 시간 포맷팅 함수 (Home.jsx와 동일)
+const formatDuration = (duration) => {
+  if (!duration) return 0;
+  
+  let totalSeconds;
+  
+  // 1. 밀리초인 경우 (duration_ms)
+  if (duration > 10000) {
+    totalSeconds = Math.floor(duration / 1000);
+  }
+  // 2. 이미 초 단위인 경우
+  else if (typeof duration === 'number') {
+    totalSeconds = duration;
+  }
+  // 3. 문자열 숫자인 경우
+  else if (typeof duration === 'string') {
+    const num = parseInt(duration);
+    totalSeconds = num > 10000 ? Math.floor(num / 1000) : num;
+  }
+  else {
+    return 0;
+  }
+  
+  return totalSeconds;
+};
+
+// 총 재생 시간을 문자열로 변환 (Home.jsx와 동일)
+const formatTotalDuration = (totalSeconds) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  
+  if (hours > 0) {
+    return `${hours}시간 ${minutes}분`;
+  }
+  return `${minutes}분`;
+};
+
 const api = {
   // 내 플레이리스트 목록 조회
   getMyPlaylists: async () => {
@@ -89,6 +126,19 @@ const api = {
       return response;
     } catch (error) {
       console.error('플레이리스트 목록 조회 실패:', error);
+      throw error;
+    }
+  },
+
+  // 플레이리스트의 노래 목록 조회 (통계를 위해)
+  getPlaylistSongs: async (playlistId) => {
+    try {
+      console.log(`플레이리스트 ${playlistId} 노래 목록 조회 시작...`);
+      const response = await apiClient.get(`/playlists/${playlistId}/songs`);
+      console.log(`플레이리스트 ${playlistId} 노래 목록 조회 성공:`, response);
+      return response;
+    } catch (error) {
+      console.error(`플레이리스트 ${playlistId} 노래 목록 조회 실패:`, error);
       throw error;
     }
   },
@@ -387,34 +437,6 @@ const PlaylistIcon = styled.div`
   justify-content: center;
   color: white;
   opacity: 0.8;
-`;
-
-const PlayButton = styled.button`
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  width: 40px;
-  height: 40px;
-  background: white;
-  border: none;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s ease;
-  opacity: 0;
-
-  ${PlaylistCard}:hover & {
-    opacity: 1;
-  }
-
-  &:hover {
-    transform: scale(1.1);
-    background: #667eea;
-    color: white;
-  }
 `;
 
 const PlaylistInfo = styled.div`
@@ -816,6 +838,7 @@ const Playlists = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [playlists, setPlaylists] = useState([]);
+  const [playlistStats, setPlaylistStats] = useState({}); // 플레이리스트 통계 정보
   const [likedSongs, setLikedSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
@@ -828,6 +851,30 @@ const Playlists = () => {
   });
   const [error, setError] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // 각 플레이리스트의 통계 정보 로드 (Home.jsx와 동일)
+  const loadPlaylistStats = async (playlistId) => {
+    try {
+      const songs = await api.getPlaylistSongs(playlistId);
+      
+      const songCount = songs.length;
+      const totalDurationSeconds = songs.reduce((total, song) => {
+        const duration = song.duration_ms || song.duration || song.length || 0;
+        return total + formatDuration(duration);
+      }, 0);
+      
+      return {
+        songCount,
+        totalDuration: totalDurationSeconds > 0 ? formatTotalDuration(totalDurationSeconds) : '0분'
+      };
+    } catch (error) {
+      console.error(`플레이리스트 ${playlistId} 통계 로드 실패:`, error);
+      return {
+        songCount: 0,
+        totalDuration: '0분'
+      };
+    }
+  };
 
   // 로그인 상태 확인
   useEffect(() => {
@@ -904,6 +951,7 @@ const Playlists = () => {
       if (!isLoggedIn) {
         setLoading(false);
         setPlaylists([]);
+        setPlaylistStats({});
         setLikedSongs([]);
         return;
       }
@@ -925,10 +973,31 @@ const Playlists = () => {
         // 플레이리스트 결과 처리
         if (playlistsData.status === 'fulfilled') {
           console.log('플레이리스트 데이터 로딩 성공:', playlistsData.value);
-          setPlaylists(playlistsData.value || []);
+          const playlistsArray = playlistsData.value || [];
+          setPlaylists(playlistsArray);
+          
+          // 각 플레이리스트의 통계 정보 로드
+          if (playlistsArray.length > 0) {
+            const statsPromises = playlistsArray.map(async (playlist) => {
+              const stats = await loadPlaylistStats(playlist.id);
+              return { id: playlist.id, ...stats };
+            });
+            
+            const statsResults = await Promise.all(statsPromises);
+            const statsMap = {};
+            statsResults.forEach(stat => {
+              statsMap[stat.id] = {
+                songCount: stat.songCount,
+                totalDuration: stat.totalDuration
+              };
+            });
+            
+            setPlaylistStats(statsMap);
+          }
         } else {
           console.error('플레이리스트 데이터 로딩 실패:', playlistsData.reason);
           setPlaylists([]);
+          setPlaylistStats({});
         }
         
         // 좋아요한 노래 결과 처리
@@ -952,6 +1021,7 @@ const Playlists = () => {
         }
         
         setPlaylists([]);
+        setPlaylistStats({});
         setLikedSongs([]);
       } finally {
         setLoading(false);
@@ -1043,9 +1113,10 @@ const Playlists = () => {
     }
   };
 
-  // 플레이리스트 클릭 시 플레이리스트 목록 페이지로 이동
+  // 플레이리스트 클릭 시 세부 페이지로 이동 (수정됨)
   const handlePlaylistClick = (playlistId) => {
-    navigate('/playlists');
+    console.log('플레이리스트 클릭:', playlistId);
+    navigate(`/playlists/${playlistId}`);
   };
 
   // 좋아요한 노래 클릭 처리
@@ -1069,28 +1140,22 @@ const Playlists = () => {
       tracks: likedSongs.length,
       isLiked: true
     },
-    ...filteredPlaylists.map(playlist => ({
-      ...playlist,
-      tracks: playlist.tracks || 0,
-      isLiked: false
-    }))
+    ...filteredPlaylists.map(playlist => {
+      const stats = playlistStats[playlist.id] || { songCount: 0, totalDuration: '0분' };
+      return {
+        ...playlist,
+        tracks: stats.songCount,
+        totalDuration: stats.totalDuration,
+        isLiked: false
+      };
+    })
   ] : [];
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('ko-KR');
   };
 
-  const formatDuration = (tracks) => {
-    const avgDuration = 210; // 평균 3분 30초
-    const totalSeconds = tracks * avgDuration;
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    
-    if (hours > 0) {
-      return `${hours}시간 ${minutes}분`;
-    }
-    return `${minutes}분`;
-  };
+  // formatDuration 함수를 삭제하고 실제 통계 데이터 사용
 
   if (loading) {
     return (
@@ -1218,16 +1283,17 @@ const Playlists = () => {
                   <PlaylistIcon isLiked={playlist.isLiked}>
                     {playlist.isLiked ? <Heart size={24} /> : <Music size={24} />}
                   </PlaylistIcon>
-                  <PlayButton>
-                    <Play size={16} fill="currentColor" />
-                  </PlayButton>
                 </PlaylistImage>
                 <PlaylistInfo>
                   <PlaylistTitle>{playlist.title}</PlaylistTitle>
                   <PlaylistStats>
                     <span>{playlist.tracks}곡</span>
-                    <span>•</span>
-                    <span>{formatDuration(playlist.tracks)}</span>
+                    {playlist.tracks > 0 && playlist.totalDuration && (
+                      <>
+                        <span>•</span>
+                        <span>{playlist.totalDuration}</span>
+                      </>
+                    )}
                   </PlaylistStats>
                   <PlaylistDescription>
                     {playlist.description || `${formatDate(playlist.created_at)}에 생성됨`}
@@ -1248,14 +1314,15 @@ const Playlists = () => {
                   <PlaylistTitle>{playlist.title}</PlaylistTitle>
                   <PlaylistStats>
                     <span>{playlist.tracks}곡</span>
-                    <span>•</span>
-                    <span>{formatDuration(playlist.tracks)}</span>
+                    {playlist.tracks > 0 && playlist.totalDuration && (
+                      <>
+                        <span>•</span>
+                        <span>{playlist.totalDuration}</span>
+                      </>
+                    )}
                   </PlaylistStats>
                 </ListPlaylistInfo>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <PlayButton style={{ position: 'static', opacity: 1 }}>
-                    <Play size={16} fill="currentColor" />
-                  </PlayButton>
                   {!playlist.isLiked && (
                     <DeleteButton 
                       isLiked={playlist.isLiked}
