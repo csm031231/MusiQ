@@ -221,52 +221,29 @@ const Search = () => {
       alert('앨범 정보를 찾을 수 없습니다.');
       return;
     }
-
+  
     try {
       setIsAddingAlbum(true);
       
-      // 1. 앨범의 트랙 목록 가져오기
-      console.log('앨범 트랙 목록 조회 중...');
-      const tracks = await getAlbumTracks(selectedAlbum.id);
+      console.log(`앨범 "${selectedAlbum.name}"을 플레이리스트에 그룹으로 추가 중...`);
       
-      if (!tracks || tracks.length === 0) {
-        alert('앨범에 트랙이 없습니다.');
-        return;
-      }
-
-      console.log(`앨범 "${selectedAlbum.name}"의 ${tracks.length}개 트랙을 플레이리스트에 추가 중...`);
+      // 백엔드의 앨범 그룹 추가 API 사용
+      const response = await apiClient.post(`/playlists/${playlistId}/add-album`, {
+        album_id: selectedAlbum.id
+      });
       
-      // 2. 각 트랙을 플레이리스트에 추가
-      let successCount = 0;
-      let skipCount = 0;
+      console.log('앨범 그룹 추가 성공:', response);
       
-      for (const track of tracks) {
-        try {
-          if (track.song_id) {
-            await apiClient.post(`/playlists/${playlistId}/songs`, {
-              song_id: track.song_id
-            });
-            successCount++;
-          }
-        } catch (error) {
-          if (error.response?.data?.detail?.includes('already in playlist')) {
-            skipCount++;
-            console.log(`트랙 "${track.name}"은 이미 플레이리스트에 있습니다.`);
-          } else {
-            console.error(`트랙 "${track.name}" 추가 실패:`, error);
-          }
+      // 백엔드 응답에 따른 결과 메시지 표시
+      if (response.success) {
+        const message = response.message || 
+          `앨범 "${selectedAlbum.name}"의 ${response.added_count || 0}곡이 플레이리스트에 추가되었습니다!`;
+        
+        if (response.skipped_count > 0) {
+          alert(message + `\n(${response.skipped_count}곡은 이미 플레이리스트에 있어서 건너뛰었습니다.)`);
+        } else {
+          alert(message);
         }
-      }
-      
-      // 3. 결과 메시지 표시
-      if (successCount > 0) {
-        let message = `앨범 "${selectedAlbum.name}"의 ${successCount}곡이 플레이리스트에 추가되었습니다!`;
-        if (skipCount > 0) {
-          message += `\n(${skipCount}곡은 이미 플레이리스트에 있어서 건너뛰었습니다.)`;
-        }
-        alert(message);
-      } else if (skipCount > 0) {
-        alert('모든 트랙이 이미 플레이리스트에 있습니다.');
       } else {
         alert('앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
       }
@@ -275,7 +252,12 @@ const Search = () => {
       
     } catch (error) {
       console.error('앨범 추가 실패:', error);
-      alert(error.message || '앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
+      
+      if (error.response?.data?.detail) {
+        alert(`앨범 추가 실패: ${error.response.data.detail}`);
+      } else {
+        alert('앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
+      }
     } finally {
       setIsAddingAlbum(false);
     }

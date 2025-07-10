@@ -1,11 +1,10 @@
-// src/pages/LikedSongs.jsx
+// src/pages/LikedSongs.jsx 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { 
   Play, 
   Heart, 
-  MoreHorizontal, 
   Plus,
   Music,
   Clock,
@@ -15,7 +14,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-// Styled Components
+// 스타일드 컴포넌트들 (PlaylistDetail과 유사)
 const PageContainer = styled.div`
   padding: 0;
   min-height: 100vh;
@@ -34,43 +33,11 @@ const PageContainer = styled.div`
   }
 `;
 
-const LoadingContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 50vh;
-  text-align: center;
-  color: white;
-  padding: 40px;
-`;
-
-const LoadingSpinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top: 3px solid white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-`;
-
-const ErrorContainer = styled(LoadingContainer)``;
-
 const Header = styled.div`
   padding: 40px;
   color: white;
   position: relative;
   z-index: 1;
-
-  @media (max-width: 768px) {
-    padding: 20px;
-  }
 `;
 
 const BackButton = styled.button`
@@ -97,12 +64,6 @@ const PlaylistInfo = styled.div`
   align-items: flex-end;
   gap: 24px;
   margin-bottom: 32px;
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
 `;
 
 const PlaylistCover = styled.div`
@@ -116,20 +77,6 @@ const PlaylistCover = styled.div`
   backdrop-filter: blur(10px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   flex-shrink: 0;
-
-  @media (max-width: 1024px) {
-    width: 150px;
-    height: 150px;
-  }
-
-  @media (max-width: 768px) {
-    width: 120px;
-    height: 120px;
-  }
-`;
-
-const PlaylistIcon = styled.div`
-  color: rgba(255, 255, 255, 0.8);
 `;
 
 const PlaylistMeta = styled.div`
@@ -152,21 +99,6 @@ const PlaylistTitle = styled.h1`
   margin: 0 0 16px 0;
   line-height: 1.1;
   word-break: break-word;
-
-  @media (max-width: 1024px) {
-    font-size: 2.5rem;
-  }
-
-  @media (max-width: 768px) {
-    font-size: 2rem;
-  }
-`;
-
-const PlaylistDescription = styled.p`
-  font-size: 1rem;
-  opacity: 0.9;
-  margin: 0 0 16px 0;
-  line-height: 1.5;
 `;
 
 const PlaylistStats = styled.div`
@@ -185,453 +117,12 @@ const SongsSection = styled.div`
   min-height: 60vh;
   position: relative;
   z-index: 2;
-
-  @media (max-width: 768px) {
-    padding: 20px;
-  }
 `;
 
-const EmptyPlaylist = styled.div`
-  text-align: center;
-  padding: 80px 20px;
-  color: #6b7280;
-
-  svg {
-    margin-bottom: 24px;
-    color: #d1d5db;
-  }
-
-  h3 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #374151;
-    margin: 0 0 8px 0;
-  }
-
-  p {
-    font-size: 1rem;
-    margin: 0;
-  }
-`;
-
-const SongsHeader = styled.div`
-  display: grid;
-  grid-template-columns: 60px 1fr 200px 80px 60px;
-  gap: 16px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-
-  @media (max-width: 1024px) {
-    grid-template-columns: 40px 1fr 120px 60px;
-    
-    .song-album {
-      display: none;
-    }
-  }
-
-  @media (max-width: 768px) {
-    grid-template-columns: 40px 1fr 60px;
-    
-    .song-duration {
-      display: none;
-    }
-  }
-`;
-
-const SongsList = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-const SongItem = styled.div`
-  display: grid;
-  grid-template-columns: 60px 1fr 200px 80px 60px;
-  gap: 16px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  cursor: pointer;
-  align-items: center;
-
-  &:hover {
-    background: #f9fafb;
-
-    .track-number {
-      opacity: 0;
-    }
-
-    .play-button {
-      opacity: 1;
-    }
-
-    .song-actions {
-      opacity: 1;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    grid-template-columns: 40px 1fr 120px 60px;
-  }
-
-  @media (max-width: 768px) {
-    grid-template-columns: 40px 1fr 60px;
-  }
-`;
-
-const SongNumber = styled.div`
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const TrackNumber = styled.span`
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-weight: 500;
-  transition: opacity 0.2s ease;
-`;
-
-const PlayButton = styled.button`
-  position: absolute;
-  background: none;
-  border: none;
-  color: #374151;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    color: #ef4444;
-    background: #f3f4f6;
-  }
-`;
-
-const SongInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-`;
-
-const SongDetails = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-`;
-
-const SongName = styled.span`
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #1f2937;
-  margin-bottom: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const SongArtist = styled.span`
-  font-size: 0.75rem;
-  color: #6b7280;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const SongAlbum = styled.div`
-  font-size: 0.875rem;
-  color: #6b7280;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  @media (max-width: 1024px) {
-    display: none;
-  }
-`;
-
-const SongDuration = styled.div`
-  font-size: 0.875rem;
-  color: #6b7280;
-  text-align: right;
-
-  @media (max-width: 768px) {
-    display: none;
-  }
-`;
-
-const SongActions = styled.div`
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-`;
-
-const ActionBtn = styled.button`
-  background: none;
-  border: none;
-  color: #6b7280;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    color: #374151;
-    background: #f3f4f6;
-  }
-
-  &.liked {
-    color: #ef4444;
-
-    &:hover {
-      background: #fef2f2;
-    }
-  }
-`;
-
-const ActionButton = styled.button`
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
-`;
-
-// 플레이리스트 모달 스타일
-const PlaylistModalOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-`;
-
-const PlaylistModal = styled.div`
-  background: white;
-  border-radius: 16px;
-  width: 90%;
-  max-width: 400px;
-  max-height: 80vh;
-  overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-`;
-
-const PlaylistModalHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #f1f5f9;
-  background: #f8fafc;
-
-  h3 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #1a1a1a;
-  }
-`;
-
-const CloseButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  color: #6b7280;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #e5e7eb;
-    color: #374151;
-  }
-`;
-
-const PlaylistModalContent = styled.div`
-  padding: 20px;
-  max-height: 400px;
-  overflow-y: auto;
-`;
-
-const SelectedSongInfo = styled.div`
-  background: #fef2f2;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  border-left: 4px solid #ef4444;
-
-  strong {
-    display: block;
-    color: #1a1a1a;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-
-  span {
-    color: #6b7280;
-    font-size: 0.875rem;
-  }
-`;
-
-const CreatePlaylistButton = styled.button`
-  width: 100%;
-  padding: 12px 16px;
-  background: #ef4444;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 16px;
-
-  &:hover {
-    background: #dc2626;
-  }
-`;
-
-const CreatePlaylistForm = styled.div`
-  margin-bottom: 16px;
-  padding: 16px;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-
-  input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    margin-bottom: 12px;
-    box-sizing: border-box;
-
-    &:focus {
-      outline: none;
-      border-color: #ef4444;
-      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
-    }
-  }
-`;
-
-const FormActions = styled.div`
-  display: flex;
-  gap: 8px;
-
-  button {
-    flex: 1;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-
-    &:first-child {
-      background: #ef4444;
-      color: white;
-
-      &:hover:not(:disabled) {
-        background: #dc2626;
-      }
-
-      &:disabled {
-        background: #d1d5db;
-        cursor: not-allowed;
-      }
-    }
-
-    &:last-child {
-      background: #f3f4f6;
-      color: #6b7280;
-
-      &:hover {
-        background: #e5e7eb;
-      }
-    }
-  }
-`;
-
-const PlaylistsList = styled.div`
-  border-top: 1px solid #f1f5f9;
-  padding-top: 16px;
-`;
-
-const NoPlaylists = styled.p`
-  text-align: center;
-  color: #6b7280;
-  font-size: 0.875rem;
-  padding: 20px;
-`;
-
-const PlaylistItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-
-  &:hover {
-    background: #fef2f2;
-    border-color: #ef4444;
-  }
-
-  span {
-    font-size: 0.875rem;
-    color: #374151;
-    font-weight: 500;
-  }
-`;
+// 나머지 스타일드 컴포넌트들은 PlaylistDetail과 동일...
 
 const LikedSongs = () => {
   const navigate = useNavigate();
-  
-  // 상태 관리
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -650,7 +141,6 @@ const LikedSongs = () => {
     headers: { 'Content-Type': 'application/json' }
   });
 
-  // 토큰 추가 인터셉터
   apiClient.interceptors.request.use((config) => {
     const token = localStorage.getItem('accessToken');
     if (token) {
@@ -659,86 +149,33 @@ const LikedSongs = () => {
     return config;
   });
 
-  // 노래 재생 (Last.fm URL로 이동)
-  const handlePlaySong = (song) => {
-    console.log('Song data:', song);
-    
-    // 1. 백엔드에서 제공하는 URL 사용 (Last.fm 링크)
-    if (song.url) {
-      window.open(song.url, '_blank');
-    } 
-    // 2. Last.fm URL을 직접 구성
-    else if (song.title && song.artist?.name) {
-      const artist = encodeURIComponent(song.artist.name.replace(/ /g, '+'));
-      const track = encodeURIComponent(song.title.replace(/ /g, '+'));
-      const lastfmUrl = `https://www.last.fm/music/${artist}/_/${track}`;
-      window.open(lastfmUrl, '_blank');
-    }
-    // 3. Spotify 미리듣기 URL (백업)
-    else if (song.preview_url) {
-      window.open(song.preview_url, '_blank');
-    } 
-    // 4. Last.fm 검색 (최후의 수단)
-    else {
-      const searchQuery = `${song.title} ${song.artist?.name}`;
-      const lastfmSearchUrl = `https://www.last.fm/search?q=${encodeURIComponent(searchQuery)}`;
-      window.open(lastfmSearchUrl, '_blank');
-    }
-  };
-
   // 로그인 상태 확인
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     setIsLoggedIn(!!token);
-    
-    if (token) {
-      loadLikedSongs();
-    } else {
-      setLoading(false);
-      setError('로그인이 필요합니다.');
-    }
   }, []);
 
   // 좋아요한 노래 목록 로드
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadLikedSongs();
+    }
+  }, [isLoggedIn]);
+
   const loadLikedSongs = async () => {
     try {
       setLoading(true);
       setError('');
 
-      // 백엔드 라우터를 확인해보니 경로가 /playlists/liked-songs일 수 있음
-      // 하지만 422 에러가 발생하므로 다른 경로를 시도해봄
-      let response;
-      
-      try {
-        // 첫 번째 시도: /playlists/liked-songs
-        response = await apiClient.get('/playlists/liked-songs');
-      } catch (error) {
-        console.log('첫 번째 경로 실패, 다른 경로 시도:', error);
-        
-        try {
-          // 두 번째 시도: 직접 경로
-          response = await apiClient.get('/playlists/my-playlists');
-          // 좋아요한 노래가 별도 API가 아닐 수 있으므로 빈 배열로 초기화
-          setSongs([]);
-          return;
-        } catch (secondError) {
-          console.log('두 번째 경로도 실패:', secondError);
-          throw secondError;
-        }
-      }
-
+      const response = await apiClient.get('/playlists/liked-songs');
       setSongs(response.data || response || []);
-      console.log('좋아요한 노래 데이터:', response.data || response);
 
     } catch (error) {
-      console.error('좋아요한 노래 목록 로드 실패:', error);
+      console.error('좋아요한 노래 로드 실패:', error);
       
       if (error.response?.status === 401) {
         setError('로그인이 필요합니다.');
         setIsLoggedIn(false);
-      } else if (error.response?.status === 422) {
-        setError('좋아요한 노래 API가 아직 구현되지 않았습니다.');
-        setSongs([]); // 빈 배열로 설정하여 UI는 정상 표시
       } else {
         setError('좋아요한 노래를 불러오는 중 오류가 발생했습니다.');
       }
@@ -747,17 +184,12 @@ const LikedSongs = () => {
     }
   };
 
-  // 좋아요 토글 (좋아요 해제)
+  // 좋아요 토글 (취소)
   const handleLikeToggle = async (songId) => {
-    if (!isLoggedIn) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
-
     try {
       await apiClient.post(`/playlists/like-song/${songId}`);
       
-      // 좋아요 해제된 노래는 목록에서 제거
+      // 좋아요 취소되면 목록에서 제거
       setSongs(prev => prev.filter(song => song.id !== songId));
       
     } catch (error) {
@@ -766,14 +198,13 @@ const LikedSongs = () => {
     }
   };
 
-  // 플레이리스트 모달 열기
+  // 플레이리스트에 추가 관련 함수들 (PlaylistDetail과 동일)
   const handleAddToPlaylist = (song) => {
     setSelectedSong(song);
     setShowPlaylistModal(true);
     fetchPlaylists();
   };
 
-  // 플레이리스트 목록 가져오기
   const fetchPlaylists = async () => {
     try {
       const response = await apiClient.get('/playlists/my-playlists');
@@ -784,7 +215,6 @@ const LikedSongs = () => {
     }
   };
 
-  // 새 플레이리스트 생성
   const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) return;
 
@@ -794,7 +224,6 @@ const LikedSongs = () => {
         description: `${selectedSong?.title}에서 생성됨`
       });
       
-      console.log('플레이리스트 생성 성공:', response.data);
       setNewPlaylistName('');
       setShowCreateForm(false);
       await fetchPlaylists();
@@ -809,7 +238,6 @@ const LikedSongs = () => {
     }
   };
 
-  // 플레이리스트에 노래 추가
   const addSongToPlaylist = async (playlistId) => {
     if (!selectedSong?.id) {
       alert('노래 정보를 찾을 수 없습니다.');
@@ -817,17 +245,16 @@ const LikedSongs = () => {
     }
 
     try {
-      const response = await apiClient.post(`/playlists/${playlistId}/songs`, {
+      await apiClient.post(`/playlists/${playlistId}/songs`, {
         song_id: selectedSong.id
       });
       
-      console.log('노래 추가 성공:', response.data);
       alert('플레이리스트에 추가되었습니다!');
       setShowPlaylistModal(false);
       
     } catch (error) {
       console.error('노래 추가 실패:', error);
-      if (error.response?.data?.message?.includes('already in playlist')) {
+      if (error.response?.data?.detail?.includes('already in playlist')) {
         alert('이미 플레이리스트에 있는 노래입니다.');
       } else {
         alert('플레이리스트에 추가하는 중 오류가 발생했습니다.');
@@ -835,33 +262,59 @@ const LikedSongs = () => {
     }
   };
 
-  // 시간 포맷팅
-  const formatDuration = (ms) => {
-    if (!ms) return '0:00';
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  // 노래 재생 함수 (PlaylistDetail과 동일)
+  const handlePlaySong = (song) => {
+    if (song.url) {
+      window.open(song.url, '_blank');
+    } else if (song.title && song.artist?.name) {
+      const artist = encodeURIComponent(song.artist.name.replace(/ /g, '+'));
+      const track = encodeURIComponent(song.title.replace(/ /g, '+'));
+      const lastfmUrl = `https://www.last.fm/music/${artist}/_/${track}`;
+      window.open(lastfmUrl, '_blank');
+    } else if (song.preview_url) {
+      window.open(song.preview_url, '_blank');
+    } else {
+      const searchQuery = `${song.title} ${song.artist?.name}`;
+      const lastfmSearchUrl = `https://www.last.fm/search?q=${encodeURIComponent(searchQuery)}`;
+      window.open(lastfmSearchUrl, '_blank');
+    }
   };
 
-  // 총 재생 시간 계산
-  const getTotalDuration = () => {
-    const totalMs = songs.reduce((total, song) => total + (song.duration_ms || 0), 0);
-    const hours = Math.floor(totalMs / 3600000);
-    const minutes = Math.floor((totalMs % 3600000) / 60000);
+  // 시간 포맷팅 함수 (PlaylistDetail과 동일)
+  const formatDuration = (duration) => {
+    if (!duration) return '0:00';
     
-    if (hours > 0) {
-      return `${hours}시간 ${minutes}분`;
+    let totalSeconds;
+    if (duration > 10000) {
+      totalSeconds = Math.floor(duration / 1000);
+    } else if (typeof duration === 'number') {
+      totalSeconds = duration;
+    } else if (typeof duration === 'string' && duration.includes(':')) {
+      return duration;
+    } else if (typeof duration === 'string') {
+      const num = parseInt(duration);
+      totalSeconds = num > 10000 ? Math.floor(num / 1000) : num;
+    } else {
+      return '0:00';
     }
-    return `${minutes}분`;
+    
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   if (loading) {
     return (
       <PageContainer>
-        <LoadingContainer>
-          <LoadingSpinner />
-          <p>좋아요한 노래를 불러오는 중...</p>
-        </LoadingContainer>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '50vh',
+          color: 'white' 
+        }}>
+          로딩 중...
+        </div>
       </PageContainer>
     );
   }
@@ -869,19 +322,37 @@ const LikedSongs = () => {
   if (error) {
     return (
       <PageContainer>
-        <ErrorContainer>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '50vh',
+          color: 'white',
+          textAlign: 'center',
+          gap: '20px'
+        }}>
           <p>{error}</p>
-          <ActionButton onClick={() => navigate(-1)}>
+          <button 
+            onClick={() => navigate(-1)}
+            style={{
+              padding: '12px 24px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
             돌아가기
-          </ActionButton>
-        </ErrorContainer>
+          </button>
+        </div>
       </PageContainer>
     );
   }
 
   return (
     <PageContainer>
-      {/* 헤더 섹션 */}
       <Header>
         <BackButton onClick={() => navigate(-1)} title="뒤로 가기">
           <ArrowLeft size={20} />
@@ -889,163 +360,489 @@ const LikedSongs = () => {
 
         <PlaylistInfo>
           <PlaylistCover>
-            <PlaylistIcon>
-              <Heart size={40} fill="currentColor" />
-            </PlaylistIcon>
+            <Heart size={40} />
           </PlaylistCover>
 
           <PlaylistMeta>
             <PlaylistType>플레이리스트</PlaylistType>
             <PlaylistTitle>좋아요 표시한 음악</PlaylistTitle>
-            <PlaylistDescription>
-              내가 좋아요를 누른 모든 노래들
-            </PlaylistDescription>
             <PlaylistStats>
               <span>{songs.length}곡</span>
-              {songs.length > 0 && (
-                <>
-                  <span>•</span>
-                  <span>{getTotalDuration()}</span>
-                </>
-              )}
             </PlaylistStats>
           </PlaylistMeta>
         </PlaylistInfo>
       </Header>
 
-      {/* 노래 목록 */}
       <SongsSection>
         {songs.length === 0 ? (
-          <EmptyPlaylist>
-            <Heart size={64} />
-            <h3>좋아요 표시한 음악이 없습니다</h3>
-            <p>마음에 드는 노래에 좋아요를 눌러보세요!</p>
-          </EmptyPlaylist>
+          <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
+            <Heart size={64} style={{ margin: '0 auto 24px', color: '#d1d5db' }} />
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#374151', margin: '0 0 8px 0' }}>
+              좋아요 표시한 음악이 없습니다
+            </h3>
+            <p style={{ fontSize: '1rem', margin: 0 }}>
+              마음에 드는 음악에 하트를 눌러보세요!
+            </p>
+          </div>
         ) : (
           <>
-            {/* 테이블 헤더 */}
-            <SongsHeader>
-              <div>#</div>
-              <div>제목</div>
-              <div className="song-album">앨범</div>
-              <div className="song-duration">
-                <Clock size={16} />
-              </div>
-              <div></div>
-            </SongsHeader>
-
             {/* 노래 목록 */}
-            <SongsList>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
               {songs.map((song, index) => (
-                <SongItem key={song.id}>
-                  <SongNumber>
-                    <TrackNumber className="track-number">{index + 1}</TrackNumber>
-                    <PlayButton 
+                <div 
+                  key={song.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '60px 1fr 200px 80px 80px',
+                    gap: '16px',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer',
+                    alignItems: 'center',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#f9fafb';
+                    const trackNumber = e.currentTarget.querySelector('.track-number');
+                    const playButton = e.currentTarget.querySelector('.play-button');
+                    const songActions = e.currentTarget.querySelector('.song-actions');
+                    if (trackNumber) trackNumber.style.opacity = '0';
+                    if (playButton) playButton.style.opacity = '1';
+                    if (songActions) songActions.style.opacity = '1';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    const trackNumber = e.currentTarget.querySelector('.track-number');
+                    const playButton = e.currentTarget.querySelector('.play-button');
+                    const songActions = e.currentTarget.querySelector('.song-actions');
+                    if (trackNumber) trackNumber.style.opacity = '1';
+                    if (playButton) playButton.style.opacity = '0';
+                    if (songActions) songActions.style.opacity = '0';
+                  }}
+                >
+                  {/* 순번/재생 버튼 */}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span 
+                      className="track-number"
+                      style={{
+                        fontSize: '0.875rem',
+                        color: '#6b7280',
+                        fontWeight: 500,
+                        transition: 'opacity 0.2s ease'
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                    <button 
                       className="play-button"
                       onClick={() => handlePlaySong(song)}
+                      style={{
+                        position: 'absolute',
+                        background: 'none',
+                        border: 'none',
+                        color: '#374151',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        borderRadius: '4px',
+                        opacity: 0,
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
                       title="재생"
+                      onMouseEnter={(e) => {
+                        e.target.style.color = '#667eea';
+                        e.target.style.background = '#f3f4f6';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.color = '#374151';
+                        e.target.style.background = 'none';
+                      }}
                     >
                       <Play size={14} />
-                    </PlayButton>
-                  </SongNumber>
+                    </button>
+                  </div>
 
-                  <SongInfo>
-                    <SongDetails>
-                      <SongName>{song.title}</SongName>
-                      <SongArtist>{song.artist?.name}</SongArtist>
-                    </SongDetails>
-                  </SongInfo>
+                  {/* 노래 정보 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                      <span style={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#1f2937',
+                        marginBottom: '2px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {song.title}
+                      </span>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        color: '#6b7280',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {song.artist?.name}
+                      </span>
+                    </div>
+                  </div>
 
-                  <SongAlbum className="song-album">
+                  {/* 앨범 */}
+                  <div style={{
+                    fontSize: '0.875rem',
+                    color: '#6b7280',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
                     <span>{song.album?.title || '-'}</span>
-                  </SongAlbum>
+                  </div>
 
-                  <SongDuration className="song-duration">
-                    <span>{formatDuration(song.duration_ms)}</span>
-                  </SongDuration>
+                  {/* 재생 시간 */}
+                  <div style={{
+                    fontSize: '0.875rem',
+                    color: '#6b7280',
+                    textAlign: 'center',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <span>{formatDuration(song.duration_ms || song.duration || song.length || 0)}</span>
+                  </div>
 
-                  <SongActions className="song-actions">
-                    <ActionBtn
-                      className="liked"
+                  {/* 액션 버튼들 */}
+                  <div 
+                    className="song-actions"
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      alignItems: 'center',
+                      opacity: 0,
+                      transition: 'opacity 0.2s ease',
+                      justifyContent: 'center',
+                      minWidth: '80px'
+                    }}
+                  >
+                    <button
                       onClick={() => handleLikeToggle(song.id)}
-                      title="좋아요 해제"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        padding: '6px',
+                        borderRadius: '4px',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title="좋아요 취소"
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#fef2f2';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = 'none';
+                      }}
                     >
                       <Heart size={16} fill="currentColor" />
-                    </ActionBtn>
-                  </SongActions>
-                </SongItem>
+                    </button>
+                    <button
+                      onClick={() => handleAddToPlaylist(song)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#6b7280',
+                        cursor: 'pointer',
+                        padding: '6px',
+                        borderRadius: '4px',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      title="플레이리스트에 추가"
+                      onMouseEnter={(e) => {
+                        e.target.style.color = '#374151';
+                        e.target.style.background = '#f3f4f6';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.color = '#6b7280';
+                        e.target.style.background = 'none';
+                      }}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                </div>
               ))}
-            </SongsList>
+            </div>
           </>
         )}
       </SongsSection>
 
-      {/* 플레이리스트 선택 모달 */}
+      {/* 플레이리스트 선택 모달 (PlaylistDetail과 동일) */}
       {showPlaylistModal && (
-        <PlaylistModalOverlay onClick={() => setShowPlaylistModal(false)}>
-          <PlaylistModal onClick={(e) => e.stopPropagation()}>
-            <PlaylistModalHeader>
-              <h3>플레이리스트에 추가</h3>
-              <CloseButton onClick={() => setShowPlaylistModal(false)}>
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => setShowPlaylistModal(false)}
+        >
+          <div 
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              width: '90%',
+              maxWidth: '400px',
+              maxHeight: '80vh',
+              overflow: 'hidden',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '20px',
+              borderBottom: '1px solid #f1f5f9',
+              background: '#f8fafc'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '1.25rem',
+                fontWeight: 600,
+                color: '#1a1a1a'
+              }}>
+                플레이리스트에 추가
+              </h3>
+              <button 
+                onClick={() => setShowPlaylistModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  color: '#6b7280',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#e5e7eb';
+                  e.target.style.color = '#374151';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'none';
+                  e.target.style.color = '#6b7280';
+                }}
+              >
                 <X size={20} />
-              </CloseButton>
-            </PlaylistModalHeader>
+              </button>
+            </div>
             
-            <PlaylistModalContent>
-              <SelectedSongInfo>
-                <strong>{selectedSong?.title}</strong>
-                <span>by {selectedSong?.artist?.name}</span>
-              </SelectedSongInfo>
+            <div style={{
+              padding: '20px',
+              maxHeight: '400px',
+              overflowY: 'auto'
+            }}>
+              <div style={{
+                background: '#f0f4ff',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                borderLeft: '4px solid #667eea'
+              }}>
+                <strong style={{
+                  display: 'block',
+                  color: '#1a1a1a',
+                  fontWeight: 600,
+                  marginBottom: '4px'
+                }}>
+                  {selectedSong?.title}
+                </strong>
+                <span style={{
+                  color: '#6b7280',
+                  fontSize: '0.875rem'
+                }}>
+                  by {selectedSong?.artist?.name}
+                </span>
+              </div>
               
               {!showCreateForm && (
-                <CreatePlaylistButton onClick={() => setShowCreateForm(true)}>
+                <button 
+                  onClick={() => setShowCreateForm(true)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: '#667eea',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    marginBottom: '16px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#5a67d8';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = '#667eea';
+                  }}
+                >
                   <Plus size={16} />
                   새 플레이리스트 만들기
-                </CreatePlaylistButton>
+                </button>
               )}
 
               {showCreateForm && (
-                <CreatePlaylistForm>
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb'
+                }}>
                   <input
                     type="text"
                     placeholder="플레이리스트 이름"
                     value={newPlaylistName}
                     onChange={(e) => setNewPlaylistName(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleCreatePlaylist()}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '0.875rem',
+                      marginBottom: '12px',
+                      boxSizing: 'border-box'
+                    }}
                   />
-                  <FormActions>
-                    <button onClick={handleCreatePlaylist} disabled={!newPlaylistName.trim()}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      onClick={handleCreatePlaylist} 
+                      disabled={!newPlaylistName.trim()}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        cursor: newPlaylistName.trim() ? 'pointer' : 'not-allowed',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        background: newPlaylistName.trim() ? '#667eea' : '#d1d5db',
+                        color: 'white'
+                      }}
+                    >
                       <Check size={16} />
                       생성
                     </button>
-                    <button onClick={() => {
-                      setShowCreateForm(false);
-                      setNewPlaylistName('');
-                    }}>
+                    <button 
+                      onClick={() => {
+                        setShowCreateForm(false);
+                        setNewPlaylistName('');
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        background: '#f3f4f6',
+                        color: '#6b7280'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#e5e7eb';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = '#f3f4f6';
+                      }}
+                    >
                       취소
                     </button>
-                  </FormActions>
-                </CreatePlaylistForm>
+                  </div>
+                </div>
               )}
               
-              <PlaylistsList>
+              <div style={{
+                borderTop: '1px solid #f1f5f9',
+                paddingTop: '16px'
+              }}>
                 {playlists.length === 0 ? (
-                  <NoPlaylists>플레이리스트가 없습니다.</NoPlaylists>
+                  <p style={{
+                    textAlign: 'center',
+                    color: '#6b7280',
+                    fontSize: '0.875rem',
+                    padding: '20px'
+                  }}>
+                    플레이리스트가 없습니다.
+                  </p>
                 ) : (
                   playlists.map(playlist => (
-                    <PlaylistItem 
+                    <div 
                       key={playlist.id}
                       onClick={() => addSongToPlaylist(playlist.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        border: '1px solid transparent'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#f0f4ff';
+                        e.target.style.borderColor = '#667eea';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = 'transparent';
+                        e.target.style.borderColor = 'transparent';
+                      }}
                     >
                       <Music size={16} />
-                      <span>{playlist.title}</span>
-                    </PlaylistItem>
+                      <span style={{
+                        fontSize: '0.875rem',
+                        color: '#374151',
+                        fontWeight: 500
+                      }}>
+                        {playlist.title}
+                      </span>
+                    </div>
                   ))
                 )}
-              </PlaylistsList>
-            </PlaylistModalContent>
-          </PlaylistModal>
-        </PlaylistModalOverlay>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </PageContainer>
   );

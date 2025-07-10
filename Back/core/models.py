@@ -96,16 +96,16 @@ class Playlist(Base):
 class PlaylistSong(Base):
     __tablename__ = "playlist_songs"
     
-    id = Column(Integer, primary_key=True, index=True)  # 기본키 추가
+    id = Column(Integer, primary_key=True, index=True)
     playlist_id = Column(Integer, ForeignKey("playlists.id"), nullable=False)
     song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
-    position = Column(Integer, nullable=False, default=0)  # 순서 추가
+    position = Column(Integer, nullable=False, default=0)
     added_at = Column(DateTime(timezone=True), server_default=func.now())
     
-    # 앨범 그룹 정보 추가
-    album_group_id = Column(String(255), nullable=True, index=True)  # 앨범 그룹 식별자
-    album_group_name = Column(String(255), nullable=True)  # 앨범 이름
-    is_album_group = Column(Boolean, default=False)  # 앨범 그룹 여부
+    # 앨범 그룹 정보 (선택적 - NULL 허용)
+    album_group_id = Column(String(255), nullable=True, index=True)
+    album_group_name = Column(String(255), nullable=True)
+    is_album_group = Column(Boolean, default=False, nullable=True)
     
     # 관계 정의
     playlist = relationship("Playlist", back_populates="playlist_songs")

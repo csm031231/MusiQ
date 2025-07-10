@@ -173,19 +173,21 @@ const api = {
   getLikedSongs: async () => {
     try {
       console.log('좋아요한 노래 목록 조회 시작...');
-      // 백엔드에서 실제 경로가 /playlists/liked-songs가 아닐 수 있으므로 확인 후 수정
-      // 일단 빈 배열로 처리하고, 실제 엔드포인트 확인 후 수정
-      console.log('좋아요한 노래 목록 조회 - 임시로 빈 배열 반환');
-      return [];
-      
-      // 실제 엔드포인트가 확인되면 아래 코드 사용
-      // const response = await apiClient.get('/playlists/liked-songs');
-      // console.log('좋아요한 노래 목록 조회 성공:', response);
-      // return response;
+      // 백엔드의 실제 엔드포인트 사용
+      const response = await apiClient.get('/playlists/liked-songs');
+      console.log('좋아요한 노래 목록 조회 성공:', response);
+      return response;
     } catch (error) {
       console.error('좋아요한 노래 목록 조회 실패:', error);
-      // 에러가 발생해도 빈 배열로 처리하여 다른 기능에 영향 주지 않음
-      return [];
+      
+      // 404 에러인 경우 빈 배열 반환 (엔드포인트가 없을 수 있음)
+      if (error.response?.status === 404) {
+        console.log('좋아요한 노래 엔드포인트가 없습니다. 빈 배열 반환.');
+        return [];
+      }
+      
+      // 다른 에러는 그대로 throw
+      throw error;
     }
   },
 

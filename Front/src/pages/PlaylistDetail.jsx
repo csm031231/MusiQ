@@ -16,7 +16,8 @@ import {
   ArrowLeft,
   Shuffle,
   X,
-  Check
+  Check,
+  Album // 앨범 그룹 아이콘 추가
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -569,7 +570,55 @@ const ActionBtn = styled.button`
   }
 `;
 
-// 플레이리스트 모달 스타일 (LikedSongs와 동일)
+// 앨범 그룹 관련 스타일 추가
+const AlbumGroupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin: 8px 0;
+  border-left: 4px solid #667eea;
+`;
+
+const AlbumGroupTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #374151;
+`;
+
+const AlbumGroupActions = styled.div`
+  display: flex;
+  gap: 8px;
+`;
+
+const AlbumGroupButton = styled.button`
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    color: #374151;
+    background: #f3f4f6;
+  }
+
+  &.danger:hover {
+    color: #ef4444;
+    background: #fef2f2;
+  }
+`;
+
+// 플레이리스트 모달 스타일
 const PlaylistModalOverlay = styled.div`
   position: fixed;
   top: 0;
@@ -863,28 +912,42 @@ const PlaylistDetail = () => {
     }
   };
 
-  // 노래 재생 (Last.fm URL로 이동 - 차트 페이지와 동일)
+  // 앨범 그룹 삭제 함수 추가
+  const handleRemoveAlbumGroup = async (groupId, groupName) => {
+    if (!window.confirm(`앨범 "${groupName}"의 모든 곡을 플레이리스트에서 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const response = await apiClient.delete(`/playlists/${id}/album-group/${groupId}`);
+      console.log('앨범 그룹 삭제 성공:', response);
+      
+      if (response.success) {
+        alert(response.message || `앨범 "${groupName}"이 삭제되었습니다.`);
+        // 노래 목록 새로고침
+        await loadPlaylistData();
+      }
+      
+    } catch (error) {
+      console.error('앨범 그룹 삭제 실패:', error);
+      alert('앨범 그룹 삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 노래 재생 (Last.fm URL로 이동)
   const handlePlaySong = (song) => {
-    console.log('Song data:', song); // 디버깅용
+    console.log('Song data:', song);
     
-    // 1. 백엔드에서 제공하는 URL 사용 (Last.fm 링크)
     if (song.url) {
       window.open(song.url, '_blank');
-    } 
-    // 2. Last.fm URL을 직접 구성 (차트와 동일한 형식)
-    else if (song.title && song.artist?.name) {
-      // Last.fm URL 형식: https://www.last.fm/music/{artist}/_/{track}
+    } else if (song.title && song.artist?.name) {
       const artist = encodeURIComponent(song.artist.name.replace(/ /g, '+'));
       const track = encodeURIComponent(song.title.replace(/ /g, '+'));
       const lastfmUrl = `https://www.last.fm/music/${artist}/_/${track}`;
       window.open(lastfmUrl, '_blank');
-    }
-    // 3. Spotify 미리듣기 URL (백업)
-    else if (song.preview_url) {
+    } else if (song.preview_url) {
       window.open(song.preview_url, '_blank');
-    } 
-    // 4. Last.fm 검색 (최후의 수단)
-    else {
+    } else {
       const searchQuery = `${song.title} ${song.artist?.name}`;
       const lastfmSearchUrl = `https://www.last.fm/search?q=${encodeURIComponent(searchQuery)}`;
       window.open(lastfmSearchUrl, '_blank');
@@ -902,13 +965,47 @@ const PlaylistDetail = () => {
       await apiClient.post(`/playlists/like-song/${songId}`);
       
       // 노래 목록에서 좋아요 상태 업데이트
-      setSongs(prev => 
-        prev.map(song => 
-          song.id === songId 
-            ? { ...song, is_liked: !song.is_liked }
-            : song
-        )
-      );
+      setSongs(prev => {
+        if (prev.album_groups) {
+          return {
+            ...prev,
+            album_groups: prev.album_groups.map(group => ({
+              ...group,
+              songs: group.songs.map(song => 
+                song.id === songId 
+                  ? { ...song, is_liked: !song.is_liked }
+                  : song
+              )
+            })),
+            individual_songs: prev.individual_songs?.map(song => 
+              song.id === songId 
+                ? { ...song, is_liked: !song.is_liked }
+                : song
+            ) || [],
+            all_songs: prev.all_songs?.map(song => 
+              song.id === songId 
+                ? { ...song, is_liked: !song.is_liked }
+                : song
+            ) || []
+          };
+        } else if (Array.isArray(prev)) {
+          return prev.map(song => 
+            song.id === songId 
+              ? { ...song, is_liked: !song.is_liked }
+              : song
+          );
+        } else if (prev.all_songs) {
+          return {
+            ...prev,
+            all_songs: prev.all_songs.map(song => 
+              song.id === songId 
+                ? { ...song, is_liked: !song.is_liked }
+                : song
+            )
+          };
+        }
+        return prev;
+      });
       
     } catch (error) {
       console.error('좋아요 토글 실패:', error);
@@ -924,7 +1021,31 @@ const PlaylistDetail = () => {
 
     try {
       await apiClient.delete(`/playlists/${id}/songs/${songId}`);
-      setSongs(prev => prev.filter(song => song.id !== songId));
+      
+      // 노래 목록에서 해당 노래 제거
+      setSongs(prev => {
+        if (prev.album_groups) {
+          return {
+            ...prev,
+            album_groups: prev.album_groups.map(group => ({
+              ...group,
+              songs: group.songs.filter(song => song.id !== songId),
+              total_songs: group.songs.filter(song => song.id !== songId).length
+            })).filter(group => group.songs.length > 0),
+            individual_songs: prev.individual_songs?.filter(song => song.id !== songId) || [],
+            all_songs: prev.all_songs?.filter(song => song.id !== songId) || []
+          };
+        } else if (Array.isArray(prev)) {
+          return prev.filter(song => song.id !== songId);
+        } else if (prev.all_songs) {
+          return {
+            ...prev,
+            all_songs: prev.all_songs.filter(song => song.id !== songId)
+          };
+        }
+        return prev;
+      });
+      
       alert('노래가 삭제되었습니다.');
     } catch (error) {
       console.error('노래 삭제 실패:', error);
@@ -949,9 +1070,7 @@ const PlaylistDetail = () => {
       setPlaylist(response.data || response);
       setEditMode(false);
       
-      // 사이드바 업데이트 이벤트
       window.dispatchEvent(new Event('playlist-updated'));
-      
       alert('플레이리스트가 수정되었습니다.');
     } catch (error) {
       console.error('플레이리스트 수정 실패:', error);
@@ -967,10 +1086,7 @@ const PlaylistDetail = () => {
 
     try {
       await apiClient.delete(`/playlists/${id}`);
-      
-      // 사이드바 업데이트 이벤트
       window.dispatchEvent(new Event('playlist-updated'));
-      
       alert('플레이리스트가 삭제되었습니다.');
       navigate('/playlists');
     } catch (error) {
@@ -1006,7 +1122,6 @@ const PlaylistDetail = () => {
         description: `${selectedSong?.title}에서 생성됨`
       });
       
-      console.log('플레이리스트 생성 성공:', response.data);
       setNewPlaylistName('');
       setShowCreateForm(false);
       await fetchPlaylists();
@@ -1014,7 +1129,6 @@ const PlaylistDetail = () => {
       if (response.data?.id) {
         await addSongToPlaylist(response.data.id);
       }
-      
     } catch (error) {
       console.error('플레이리스트 생성 실패:', error);
       alert('플레이리스트 생성 중 오류가 발생했습니다.');
@@ -1029,14 +1143,12 @@ const PlaylistDetail = () => {
     }
 
     try {
-      const response = await apiClient.post(`/playlists/${playlistId}/songs`, {
+      await apiClient.post(`/playlists/${playlistId}/songs`, {
         song_id: selectedSong.id
       });
       
-      console.log('노래 추가 성공:', response.data);
       alert('플레이리스트에 추가되었습니다!');
       setShowPlaylistModal(false);
-      
     } catch (error) {
       console.error('노래 추가 실패:', error);
       if (error.response?.data?.message?.includes('already in playlist')) {
@@ -1047,30 +1159,21 @@ const PlaylistDetail = () => {
     }
   };
 
-  // 시간 포맷팅 - 다양한 형식 지원
+  // 시간 포맷팅
   const formatDuration = (duration) => {
     if (!duration) return '0:00';
     
     let totalSeconds;
-    
-    // 1. 밀리초인 경우 (duration_ms)
     if (duration > 10000) {
       totalSeconds = Math.floor(duration / 1000);
-    }
-    // 2. 이미 초 단위인 경우
-    else if (typeof duration === 'number') {
+    } else if (typeof duration === 'number') {
       totalSeconds = duration;
-    }
-    // 3. 문자열 형태의 시간인 경우 (예: "3:45")
-    else if (typeof duration === 'string' && duration.includes(':')) {
+    } else if (typeof duration === 'string' && duration.includes(':')) {
       return duration;
-    }
-    // 4. 문자열 숫자인 경우
-    else if (typeof duration === 'string') {
+    } else if (typeof duration === 'string') {
       const num = parseInt(duration);
       totalSeconds = num > 10000 ? Math.floor(num / 1000) : num;
-    }
-    else {
+    } else {
       return '0:00';
     }
     
@@ -1084,20 +1187,31 @@ const PlaylistDetail = () => {
     return new Date(dateString).toLocaleDateString('ko-KR');
   };
 
-  // 총 재생 시간 계산 - 수정된 formatDuration 사용
+  // 총 재생 시간 계산
   const getTotalDuration = () => {
-    const totalSeconds = songs.reduce((total, song) => {
+    let allSongs = [];
+    
+    if (songs.album_groups) {
+      songs.album_groups.forEach(group => {
+        allSongs = allSongs.concat(group.songs);
+      });
+      if (songs.individual_songs) {
+        allSongs = allSongs.concat(songs.individual_songs);
+      }
+    } else if (songs.all_songs) {
+      allSongs = songs.all_songs;
+    } else if (Array.isArray(songs)) {
+      allSongs = songs;
+    }
+    
+    const totalSeconds = allSongs.reduce((total, song) => {
       const duration = song.duration_ms || song.duration || song.length || 0;
-      
       let seconds;
       if (duration > 10000) {
-        // 밀리초인 경우
         seconds = Math.floor(duration / 1000);
       } else {
-        // 이미 초 단위인 경우
         seconds = duration;
       }
-      
       return total + seconds;
     }, 0);
     
@@ -1108,6 +1222,253 @@ const PlaylistDetail = () => {
       return `${hours}시간 ${minutes}분`;
     }
     return `${minutes}분`;
+  };
+
+  // 노래 목록 렌더링 함수
+  const renderSongsWithGroups = () => {
+    if (songs.album_groups && songs.album_groups.length > 0) {
+      return (
+        <>
+          <SongsHeader>
+            <div style={{ textAlign: 'center' }}>#</div>
+            <div>제목</div>
+            <div className="song-album">앨범</div>
+            <div className="song-duration" style={{ textAlign: 'center' }}>
+              <Clock size={16} style={{ margin: '0 auto' }} />
+            </div>
+            <div></div>
+          </SongsHeader>
+
+          <SongsList>
+            {songs.album_groups.map((group) => (
+              <div key={group.group_id}>
+                <AlbumGroupHeader>
+                  <AlbumGroupTitle>
+                    <Album size={16} />
+                    <span>{group.group_name}</span>
+                    <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                      ({group.total_songs}곡)
+                    </span>
+                  </AlbumGroupTitle>
+                  <AlbumGroupActions>
+                    <AlbumGroupButton
+                      className="danger"
+                      onClick={() => handleRemoveAlbumGroup(group.group_id, group.group_name)}
+                      title="앨범 전체 삭제"
+                    >
+                      <Trash2 size={16} />
+                    </AlbumGroupButton>
+                  </AlbumGroupActions>
+                </AlbumGroupHeader>
+                
+                {group.songs.map((song, index) => (
+                  <SongItem key={`${group.group_id}-${song.id}`}>
+                    <SongNumber>
+                      <TrackNumber className="track-number">{index + 1}</TrackNumber>
+                      <PlayButton 
+                        className="play-button"
+                        onClick={() => handlePlaySong(song)}
+                        title="재생"
+                      >
+                        <Play size={14} />
+                      </PlayButton>
+                    </SongNumber>
+
+                    <SongInfo>
+                      <SongDetails>
+                        <SongName>{song.title}</SongName>
+                        <SongArtist>{song.artist?.name}</SongArtist>
+                      </SongDetails>
+                    </SongInfo>
+
+                    <SongAlbum className="song-album">
+                      <span>{song.album?.title || '-'}</span>
+                    </SongAlbum>
+
+                    <SongDuration className="song-duration">
+                      <span>{formatDuration(song.duration_ms || song.duration || song.length || 0)}</span>
+                    </SongDuration>
+
+                    <SongActions className="song-actions">
+                      <ActionBtn
+                        className={song.is_liked ? 'liked' : ''}
+                        onClick={() => handleLikeToggle(song.id)}
+                        title="좋아요"
+                      >
+                        <Heart 
+                          size={16} 
+                          fill={song.is_liked ? 'currentColor' : 'none'}
+                        />
+                      </ActionBtn>
+                      <ActionBtn
+                        onClick={() => handleAddToPlaylist(song)}
+                        title="다른 플레이리스트에 추가"
+                      >
+                        <Plus size={16} />
+                      </ActionBtn>
+                      <ActionBtn
+                        onClick={() => handleRemoveSong(song.id)}
+                        title="플레이리스트에서 삭제"
+                      >
+                        <Trash2 size={16} />
+                      </ActionBtn>
+                    </SongActions>
+                  </SongItem>
+                ))}
+              </div>
+            ))}
+
+            {songs.individual_songs && songs.individual_songs.map((song, index) => (
+              <SongItem key={song.id}>
+                <SongNumber>
+                  <TrackNumber className="track-number">{index + 1}</TrackNumber>
+                  <PlayButton 
+                    className="play-button"
+                    onClick={() => handlePlaySong(song)}
+                    title="재생"
+                  >
+                    <Play size={14} />
+                  </PlayButton>
+                </SongNumber>
+
+                <SongInfo>
+                  <SongDetails>
+                    <SongName>{song.title}</SongName>
+                    <SongArtist>{song.artist?.name}</SongArtist>
+                  </SongDetails>
+                </SongInfo>
+
+                <SongAlbum className="song-album">
+                  <span>{song.album?.title || '-'}</span>
+                </SongAlbum>
+
+                <SongDuration className="song-duration">
+                  <span>{formatDuration(song.duration_ms || song.duration || song.length || 0)}</span>
+                </SongDuration>
+
+                <SongActions className="song-actions">
+                  <ActionBtn
+                    className={song.is_liked ? 'liked' : ''}
+                    onClick={() => handleLikeToggle(song.id)}
+                    title="좋아요"
+                  >
+                    <Heart 
+                      size={16} 
+                      fill={song.is_liked ? 'currentColor' : 'none'}
+                    />
+                  </ActionBtn>
+                  <ActionBtn
+                    onClick={() => handleAddToPlaylist(song)}
+                    title="다른 플레이리스트에 추가"
+                  >
+                    <Plus size={16} />
+                  </ActionBtn>
+                  <ActionBtn
+                    onClick={() => handleRemoveSong(song.id)}
+                    title="플레이리스트에서 삭제"
+                  >
+                    <Trash2 size={16} />
+                  </ActionBtn>
+                </SongActions>
+              </SongItem>
+            ))}
+          </SongsList>
+        </>
+      );
+    }
+
+    // 기존 형태의 데이터인 경우
+    const songsToRender = songs.all_songs || songs || [];
+    
+    return (
+      <>
+        <SongsHeader>
+          <div style={{ textAlign: 'center' }}>#</div>
+          <div>제목</div>
+          <div className="song-album">앨범</div>
+          <div className="song-duration" style={{ textAlign: 'center' }}>
+            <Clock size={16} style={{ margin: '0 auto' }} />
+          </div>
+          <div></div>
+        </SongsHeader>
+
+        <SongsList>
+          {songsToRender.map((song, index) => (
+            <SongItem key={song.id}>
+              <SongNumber>
+                <TrackNumber className="track-number">{index + 1}</TrackNumber>
+                <PlayButton 
+                  className="play-button"
+                  onClick={() => handlePlaySong(song)}
+                  title="재생"
+                >
+                  <Play size={14} />
+                </PlayButton>
+              </SongNumber>
+
+              <SongInfo>
+                <SongDetails>
+                  <SongName>{song.title}</SongName>
+                  <SongArtist>{song.artist?.name}</SongArtist>
+                </SongDetails>
+              </SongInfo>
+
+              <SongAlbum className="song-album">
+                <span>{song.album?.title || '-'}</span>
+              </SongAlbum>
+
+              <SongDuration className="song-duration">
+                <span>{formatDuration(song.duration_ms || song.duration || song.length || 0)}</span>
+              </SongDuration>
+
+              <SongActions className="song-actions">
+                <ActionBtn
+                  className={song.is_liked ? 'liked' : ''}
+                  onClick={() => handleLikeToggle(song.id)}
+                  title="좋아요"
+                >
+                  <Heart 
+                    size={16} 
+                    fill={song.is_liked ? 'currentColor' : 'none'}
+                  />
+                </ActionBtn>
+                <ActionBtn
+                  onClick={() => handleAddToPlaylist(song)}
+                  title="다른 플레이리스트에 추가"
+                >
+                  <Plus size={16} />
+                </ActionBtn>
+                <ActionBtn
+                  onClick={() => handleRemoveSong(song.id)}
+                  title="플레이리스트에서 삭제"
+                >
+                  <Trash2 size={16} />
+                </ActionBtn>
+              </SongActions>
+            </SongItem>
+          ))}
+        </SongsList>
+      </>
+    );
+  };
+
+  // 노래 개수 계산
+  const getSongCount = () => {
+    if (songs.album_groups) {
+      let count = 0;
+      songs.album_groups.forEach(group => {
+        count += group.total_songs || group.songs?.length || 0;
+      });
+      if (songs.individual_songs) {
+        count += songs.individual_songs.length;
+      }
+      return count;
+    } else if (songs.all_songs) {
+      return songs.all_songs.length;
+    } else if (Array.isArray(songs)) {
+      return songs.length;
+    }
+    return 0;
   };
 
   if (loading) {
@@ -1153,9 +1514,10 @@ const PlaylistDetail = () => {
     );
   }
 
+  const songCount = getSongCount();
+
   return (
     <PageContainer>
-      {/* 헤더 섹션 */}
       <Header>
         <BackButton onClick={() => navigate(-1)} title="뒤로 가기">
           <ArrowLeft size={20} />
@@ -1210,8 +1572,8 @@ const PlaylistDetail = () => {
                   <PlaylistDescription>{playlist.description}</PlaylistDescription>
                 )}
                 <PlaylistStats>
-                  <span>{songs.length}곡</span>
-                  {songs.length > 0 && (
+                  <span>{songCount}곡</span>
+                  {songCount > 0 && (
                     <>
                       <span>•</span>
                       <span>{getTotalDuration()}</span>
@@ -1225,7 +1587,6 @@ const PlaylistDetail = () => {
           </PlaylistMeta>
         </PlaylistInfo>
 
-        {/* 플레이리스트 액션 버튼들 */}
         <PlaylistActions>
           {!editMode && (
             <>
@@ -1248,89 +1609,18 @@ const PlaylistDetail = () => {
         </PlaylistActions>
       </Header>
 
-      {/* 노래 목록 */}
       <SongsSection>
-        {songs.length === 0 ? (
+        {songCount === 0 ? (
           <EmptyPlaylist>
             <Music size={64} />
             <h3>이 플레이리스트는 비어있습니다</h3>
             <p>좋아하는 노래를 추가해보세요!</p>
           </EmptyPlaylist>
         ) : (
-          <>
-            {/* 테이블 헤더 */}
-            <SongsHeader>
-              <div style={{ textAlign: 'center' }}>#</div>
-              <div>제목</div>
-              <div className="song-album">앨범</div>
-              <div className="song-duration" style={{ textAlign: 'center' }}>
-                <Clock size={16} style={{ margin: '0 auto' }} />
-              </div>
-              <div></div>
-            </SongsHeader>
-
-            {/* 노래 목록 */}
-            <SongsList>
-              {songs.map((song, index) => (
-                <SongItem key={song.id}>
-                  <SongNumber>
-                    <TrackNumber className="track-number">{index + 1}</TrackNumber>
-                    <PlayButton 
-                      className="play-button"
-                      onClick={() => handlePlaySong(song)}
-                      title="재생"
-                    >
-                      <Play size={14} />
-                    </PlayButton>
-                  </SongNumber>
-
-                  <SongInfo>
-                    <SongDetails>
-                      <SongName>{song.title}</SongName>
-                      <SongArtist>{song.artist?.name}</SongArtist>
-                    </SongDetails>
-                  </SongInfo>
-
-                  <SongAlbum className="song-album">
-                    <span>{song.album?.title || '-'}</span>
-                  </SongAlbum>
-
-                  <SongDuration className="song-duration">
-                    <span>{formatDuration(song.duration_ms || song.duration || song.length || 0)}</span>
-                  </SongDuration>
-
-                  <SongActions className="song-actions">
-                    <ActionBtn
-                      className={song.is_liked ? 'liked' : ''}
-                      onClick={() => handleLikeToggle(song.id)}
-                      title="좋아요"
-                    >
-                      <Heart 
-                        size={16} 
-                        fill={song.is_liked ? 'currentColor' : 'none'}
-                      />
-                    </ActionBtn>
-                    <ActionBtn
-                      onClick={() => handleAddToPlaylist(song)}
-                      title="다른 플레이리스트에 추가"
-                    >
-                      <Plus size={16} />
-                    </ActionBtn>
-                    <ActionBtn
-                      onClick={() => handleRemoveSong(song.id)}
-                      title="플레이리스트에서 삭제"
-                    >
-                      <Trash2 size={16} />
-                    </ActionBtn>
-                  </SongActions>
-                </SongItem>
-              ))}
-            </SongsList>
-          </>
+          renderSongsWithGroups()
         )}
       </SongsSection>
 
-      {/* 플레이리스트 선택 모달 */}
       {showPlaylistModal && (
         <PlaylistModalOverlay onClick={() => setShowPlaylistModal(false)}>
           <PlaylistModal onClick={(e) => e.stopPropagation()}>
