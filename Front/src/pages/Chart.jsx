@@ -120,6 +120,7 @@ const Chart = () => {
       return;
     }
 
+    console.log('선택된 노래:', song);
     setSelectedSong(song);
     setShowPlaylistModal(true);
     fetchPlaylists();
@@ -162,29 +163,63 @@ const Chart = () => {
     }
   };
 
-  // 플레이리스트에 노래 추가
+  // 플레이리스트에 노래 추가 (수정된 버전)
   const addSongToPlaylist = async (playlistId) => {
-    // 백엔드에서 song_id를 제공하므로 이를 사용
+    // 차트 API에서 제공하는 song_id 확인
+    console.log('노래 추가 시도:', {
+      playlistId,
+      selectedSong,
+      song_id: selectedSong?.song_id
+    });
+
     if (!selectedSong?.song_id) {
-      alert('노래 정보를 찾을 수 없습니다.');
+      console.error('song_id가 없습니다:', selectedSong);
+      alert('노래 정보를 찾을 수 없습니다. (song_id 누락)');
       return;
     }
   
     try {
-      const response = await apiClient.post(`/playlists/${playlistId}/songs`, {
+      console.log(`플레이리스트 ${playlistId}에 노래 ${selectedSong.song_id} 추가 중...`);
+      
+      const requestData = {
         song_id: selectedSong.song_id // Chart API에서 제공하는 song_id 사용
-      });
+      };
+      
+      console.log('요청 데이터:', requestData);
+      
+      const response = await apiClient.post(`/playlists/${playlistId}/songs`, requestData);
       
       console.log('노래 추가 성공:', response.data);
-      alert('플레이리스트에 추가되었습니다!');
+      
+      if (response.data && response.data.success) {
+        alert(response.data.message || '플레이리스트에 추가되었습니다!');
+      } else {
+        alert('플레이리스트에 추가되었습니다!');
+      }
+      
       setShowPlaylistModal(false);
       
     } catch (error) {
       console.error('노래 추가 실패:', error);
-      if (error.response?.data?.detail?.includes('already in playlist')) {
-        alert('이미 플레이리스트에 있는 노래입니다.');
+      console.error('에러 응답:', error.response?.data);
+      
+      if (error.response?.status === 400) {
+        const errorDetail = error.response.data?.detail || '';
+        if (errorDetail.includes('already') || errorDetail.includes('exist')) {
+          alert('이미 플레이리스트에 있는 노래입니다.');
+        } else if (errorDetail.includes('not found')) {
+          alert('노래를 찾을 수 없습니다.');
+        } else {
+          alert(`요청 오류: ${errorDetail}`);
+        }
+      } else if (error.response?.status === 404) {
+        alert('플레이리스트를 찾을 수 없습니다.');
+      } else if (error.response?.status === 401) {
+        alert('로그인이 필요합니다.');
+      } else if (error.response?.status === 500) {
+        alert('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        alert('플레이리스트에 추가하는 중 오류가 발생했습니다.');
+        alert(`플레이리스트에 추가하는 중 오류가 발생했습니다: ${error.message}`);
       }
     }
   };
@@ -343,6 +378,14 @@ const Chart = () => {
               <div className="selected-song-info">
                 <strong>{selectedSong?.title}</strong>
                 <span>by {selectedSong?.artist?.name}</span>
+                <small style={{ 
+                  display: 'block', 
+                  color: '#6b7280', 
+                  fontSize: '0.75rem', 
+                  marginTop: '4px' 
+                }}>
+                  Song ID: {selectedSong?.song_id}
+                </small>
               </div>
               
               {!showCreateForm && (

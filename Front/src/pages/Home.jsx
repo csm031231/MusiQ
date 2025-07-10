@@ -75,11 +75,45 @@ const Home = () => {
     return `${minutes}분`;
   };
 
-  // 각 플레이리스트의 통계 정보 로드
+  // 각 플레이리스트의 통계 정보 로드 (수정된 버전)
   const loadPlaylistStats = async (playlistId) => {
     try {
       const response = await apiClient.get(`/playlists/${playlistId}/songs`);
-      const songs = response.data || response;
+      console.log(`플레이리스트 ${playlistId} 응답:`, response.data);
+      
+      // 다양한 응답 구조 지원
+      let songs = [];
+      
+      if (response.data) {
+        // 새로운 형식 - all_songs 배열
+        if (response.data.all_songs && Array.isArray(response.data.all_songs)) {
+          songs = response.data.all_songs;
+        }
+        // 새로운 형식 - songs 배열 (호환성)
+        else if (response.data.songs && Array.isArray(response.data.songs)) {
+          songs = response.data.songs;
+        }
+        // 응답 자체가 배열인 경우 (이전 형식)
+        else if (Array.isArray(response.data)) {
+          songs = response.data;
+        }
+        // 응답이 객체이지만 배열이 아닌 경우 빈 배열로 처리
+        else {
+          console.warn(`플레이리스트 ${playlistId} 응답 구조가 예상과 다름:`, response.data);
+          songs = [];
+        }
+      }
+      
+      console.log(`플레이리스트 ${playlistId} 처리된 songs:`, songs);
+      
+      // 안전한 배열 확인
+      if (!Array.isArray(songs)) {
+        console.warn(`플레이리스트 ${playlistId} songs가 배열이 아님:`, songs);
+        return {
+          songCount: 0,
+          totalDuration: '0분'
+        };
+      }
       
       const songCount = songs.length;
       const totalDurationSeconds = songs.reduce((total, song) => {
@@ -115,24 +149,40 @@ const Home = () => {
           
           // 각 플레이리스트의 통계 정보 로드
           const statsPromises = playlistsData.map(async (playlist) => {
-            const stats = await loadPlaylistStats(playlist.id);
-            return { id: playlist.id, ...stats };
+            try {
+              const stats = await loadPlaylistStats(playlist.id);
+              return { id: playlist.id, ...stats };
+            } catch (error) {
+              console.error(`플레이리스트 ${playlist.id} 통계 로드 실패:`, error);
+              return { 
+                id: playlist.id, 
+                songCount: 0, 
+                totalDuration: '0분' 
+              };
+            }
           });
           
-          const statsResults = await Promise.all(statsPromises);
-          const statsMap = {};
-          statsResults.forEach(stat => {
-            statsMap[stat.id] = {
-              songCount: stat.songCount,
-              totalDuration: stat.totalDuration
-            };
-          });
-          
-          setPlaylistStats(statsMap);
+          try {
+            const statsResults = await Promise.all(statsPromises);
+            const statsMap = {};
+            statsResults.forEach(stat => {
+              statsMap[stat.id] = {
+                songCount: stat.songCount,
+                totalDuration: stat.totalDuration
+              };
+            });
+            
+            setPlaylistStats(statsMap);
+          } catch (error) {
+            console.error('통계 로드 실패:', error);
+            // 통계 로드 실패 시 빈 객체로 설정
+            setPlaylistStats({});
+          }
           
         } catch (error) {
           console.error('플레이리스트 로드 실패:', error);
           setPlaylists([]);
+          setPlaylistStats({});
         } finally {
           setPlaylistsLoading(false);
         }
