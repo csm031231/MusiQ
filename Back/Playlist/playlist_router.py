@@ -98,7 +98,7 @@ async def add_album_to_playlist(
     db: AsyncSession = Depends(provide_session)
 ):
     """
-    앨범 전체를 플레이리스트에 추가 (단순 버전)
+    앨범 전체를 플레이리스트에 그룹으로 추가
     """
     try:
         # 플레이리스트 존재 및 권한 확인
@@ -118,7 +118,7 @@ async def add_album_to_playlist(
                 detail="Playlist not found or you don't have permission to modify it"
             )
         
-        # 앨범 트랙 목록 가져오기
+        # 앨범 트랙 목록 가져오기 (Api_router의 get_album_tracks 사용)
         from Api.Api_router import get_album_tracks as fetch_album_tracks
         album_tracks_response = await fetch_album_tracks(album_data.album_id, db)
         
@@ -144,11 +144,15 @@ async def add_album_to_playlist(
         )
         max_position = result.scalar() or 0
         
+        # 앨범 그룹 정보 생성
+        from datetime import datetime
+        album_group_id = f"album_{album_data.album_id}_{int(datetime.now().timestamp())}"
+        
         added_songs = []
         success_count = 0
         skip_count = 0
         
-        # 트랙을 순서대로 추가 (그룹 기능 없이 단순하게)
+        # 트랙을 순서대로 추가 (트랙 번호 순)
         sorted_tracks = sorted(tracks, key=lambda t: (t.get('disc_number', 1), t.get('track_number', 0)))
         
         for track in sorted_tracks:
@@ -171,13 +175,15 @@ async def add_album_to_playlist(
                     skip_count += 1
                     continue
                 
-                # 플레이리스트에 추가 (기본 구조)
+                # 플레이리스트에 추가
                 max_position += 1
                 new_playlist_song = PlaylistSong(
                     playlist_id=playlist_id,
                     song_id=song_id,
-                    position=max_position
-                    # 앨범 그룹 필드는 나중에 추가 예정
+                    position=max_position,
+                    album_group_id=album_group_id,  # 앨범 그룹 ID 추가
+                    album_group_name=album_info.get('name'),  # 앨범 그룹 이름 추가
+                    is_album_group=True  # 앨범 그룹 여부
                 )
                 
                 db.add(new_playlist_song)
@@ -198,11 +204,12 @@ async def add_album_to_playlist(
         return {
             "success": True,
             "album": album_info,
+            "album_group_id": album_group_id,
             "added_count": success_count,
             "skipped_count": skip_count,
             "total_tracks": len(tracks),
             "added_songs": added_songs,
-            "message": f"앨범 '{album_info.get('name')}'의 {success_count}곡이 추가되었습니다."
+            "message": f"앨범 '{album_info.get('name')}'의 {success_count}곡이 그룹으로 추가되었습니다."
         }
         
     except HTTPException:
@@ -223,7 +230,7 @@ async def get_playlist_songs(
     db: AsyncSession = Depends(provide_session)
 ):
     """
-    플레이리스트의 노래 목록 조회 (기본 구조 - 안정적)
+    플레이리스트의 노래 목록 조회 (앨범 그룹 정보 포함)
     """
     try:
         # 플레이리스트 존재 및 권한 확인
@@ -243,7 +250,7 @@ async def get_playlist_songs(
                 detail="Playlist not found or you don't have permission to access it"
             )
         
-        # 플레이리스트 노래 목록 조회 (기본 구조)
+        # 플레이리스트 노래 목록 조회 (그룹 정보 포함)
         result = await db.execute(
             select(PlaylistSong, Song, Artist, Album)
             .join(Song, PlaylistSong.song_id == Song.id)
@@ -254,6 +261,10 @@ async def get_playlist_songs(
         )
         
         songs_data = result.all()
+        
+        # 그룹화된 노래 목록 생성
+        grouped_songs = {}
+        individual_songs = []
         all_songs = []
         
         for playlist_song, song, artist, album in songs_data:
@@ -287,19 +298,42 @@ async def get_playlist_songs(
                     "title": album.title if album else None,
                     "cover_url": album.cover_url if album else None
                 } if album else None,
-                # 앨범 그룹 정보 (안전하게 추가)
-                "album_group_id": getattr(playlist_song, 'album_group_id', None),
-                "album_group_name": getattr(playlist_song, 'album_group_name', None),
-                "is_album_group": getattr(playlist_song, 'is_album_group', False)
+                # 앨범 그룹 정보
+                "album_group_id": playlist_song.album_group_id,
+                "album_group_name": playlist_song.album_group_name,
+                "is_album_group": playlist_song.is_album_group or bool(playlist_song.album_group_id)
             }
             
+            # 모든 노래 목록에 추가 (기존 호환성)
             all_songs.append(song_info)
+            
+            # 앨범 그룹이 있는 경우 그룹화
+            if playlist_song.album_group_id:
+                group_id = playlist_song.album_group_id
+                if group_id not in grouped_songs:
+                    grouped_songs[group_id] = {
+                        "group_id": group_id,
+                        "group_name": playlist_song.album_group_name,
+                        "group_type": "album",
+                        "songs": [],
+                        "total_songs": 0,
+                        "total_duration": 0
+                    }
+                
+                grouped_songs[group_id]["songs"].append(song_info)
+                grouped_songs[group_id]["total_songs"] += 1
+                if song.duration_ms:
+                    grouped_songs[group_id]["total_duration"] += song.duration_ms
+            else:
+                individual_songs.append(song_info)
         
-        # 단순한 구조로 반환 (프론트엔드 호환성 유지)
+        # 최종 응답 구성
         response_data = {
             "playlist_id": playlist_id,
             "total_songs": len(songs_data),
-            "all_songs": all_songs
+            "album_groups": list(grouped_songs.values()),
+            "individual_songs": individual_songs,
+            "all_songs": all_songs  # 기존 호환성을 위해 유지
         }
         
         return response_data
@@ -307,13 +341,11 @@ async def get_playlist_songs(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error in get_playlist_songs: {str(e)}")
-        # 에러 발생 시에도 기본 구조 반환
-        return {
-            "playlist_id": playlist_id,
-            "total_songs": 0,
-            "all_songs": []
-        }
+        print(f"Error getting playlist songs: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="플레이리스트 조회 중 오류가 발생했습니다."
+        )
 
 # 앨범 그룹 전체 삭제
 @router.delete("/{playlist_id}/album-group/{group_id}")
