@@ -126,17 +126,9 @@ const Search = () => {
       alert('로그인이 필요합니다.');
       return;
     }
-  
-    console.log('선택된 노래 데이터:', song);
-  
-    // song_id 체크
-    if (!song.song_id) {
-      alert('이 노래는 현재 플레이리스트에 추가할 수 없습니다.\n(데이터베이스에 저장되지 않았습니다.)');
-      return;
-    }
-  
+
     setSelectedSong(song);
-    setSelectedAlbum(null);
+    setSelectedAlbum(null); // 트랙 추가 시 앨범 선택 초기화
     setShowPlaylistModal(true);
     fetchPlaylists();
   };
@@ -229,29 +221,52 @@ const Search = () => {
       alert('앨범 정보를 찾을 수 없습니다.');
       return;
     }
-  
+
     try {
       setIsAddingAlbum(true);
       
-      console.log(`앨범 "${selectedAlbum.name}"을 플레이리스트에 그룹으로 추가 중...`);
+      // 1. 앨범의 트랙 목록 가져오기
+      console.log('앨범 트랙 목록 조회 중...');
+      const tracks = await getAlbumTracks(selectedAlbum.id);
       
-      // 백엔드의 앨범 그룹 추가 API 사용
-      const response = await apiClient.post(`/playlists/${playlistId}/add-album`, {
-        album_id: selectedAlbum.id
-      });
+      if (!tracks || tracks.length === 0) {
+        alert('앨범에 트랙이 없습니다.');
+        return;
+      }
+
+      console.log(`앨범 "${selectedAlbum.name}"의 ${tracks.length}개 트랙을 플레이리스트에 추가 중...`);
       
-      console.log('앨범 그룹 추가 성공:', response);
+      // 2. 각 트랙을 플레이리스트에 추가
+      let successCount = 0;
+      let skipCount = 0;
       
-      // 백엔드 응답에 따른 결과 메시지 표시
-      if (response.success) {
-        const message = response.message || 
-          `앨범 "${selectedAlbum.name}"의 ${response.added_count || 0}곡이 플레이리스트에 추가되었습니다!`;
-        
-        if (response.skipped_count > 0) {
-          alert(message + `\n(${response.skipped_count}곡은 이미 플레이리스트에 있어서 건너뛰었습니다.)`);
-        } else {
-          alert(message);
+      for (const track of tracks) {
+        try {
+          if (track.song_id) {
+            await apiClient.post(`/playlists/${playlistId}/songs`, {
+              song_id: track.song_id
+            });
+            successCount++;
+          }
+        } catch (error) {
+          if (error.response?.data?.detail?.includes('already in playlist')) {
+            skipCount++;
+            console.log(`트랙 "${track.name}"은 이미 플레이리스트에 있습니다.`);
+          } else {
+            console.error(`트랙 "${track.name}" 추가 실패:`, error);
+          }
         }
+      }
+      
+      // 3. 결과 메시지 표시
+      if (successCount > 0) {
+        let message = `앨범 "${selectedAlbum.name}"의 ${successCount}곡이 플레이리스트에 추가되었습니다!`;
+        if (skipCount > 0) {
+          message += `\n(${skipCount}곡은 이미 플레이리스트에 있어서 건너뛰었습니다.)`;
+        }
+        alert(message);
+      } else if (skipCount > 0) {
+        alert('모든 트랙이 이미 플레이리스트에 있습니다.');
       } else {
         alert('앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
       }
@@ -260,12 +275,7 @@ const Search = () => {
       
     } catch (error) {
       console.error('앨범 추가 실패:', error);
-      
-      if (error.response?.data?.detail) {
-        alert(`앨범 추가 실패: ${error.response.data.detail}`);
-      } else {
-        alert('앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
-      }
+      alert(error.message || '앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
     } finally {
       setIsAddingAlbum(false);
     }
@@ -444,54 +454,58 @@ const Search = () => {
 
             {/* 트랙 섹션 */}
             {filteredResults.tracks.length > 0 && (
-  <div className="result-section">
-    <h3 className="section-title">
-      트랙 ({filteredResults.tracks.length})
-      {/* 디버깅 정보 표시 */}
-      {process.env.NODE_ENV === 'development' && (
-        <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: '10px' }}>
-          (추가 가능: {filteredResults.tracks.filter(t => t.song_id).length}개)
-        </span>
-      )}
-    </h3>
-    <div className="results-list">
-      {filteredResults.tracks.map(track => (
-        <div key={track.id} className="result-item track-item">
-          <div className="result-image small">
-            {track.image ? (
-              <img src={track.image} alt={track.name} />
-            ) : (
-              <Music size={24} />
+              <div className="result-section">
+                <h3 className="section-title">트랙 ({filteredResults.tracks.length})</h3>
+                <div className="results-list">
+                  {filteredResults.tracks.map(track => (
+                    <div key={track.id} className="result-item track-item">
+                      <div className="result-image small">
+                        {track.image ? (
+                          <img src={track.image} alt={track.name} />
+                        ) : (
+                          <Music size={24} />
+                        )}
+                      </div>
+                      <div className="result-info">
+                        <p className="result-title">{track.name}</p>
+                        <p className="result-artist">{track.artists?.join(', ')}</p>
+                        <p className="result-details">{track.album}</p>
+                      </div>
+                      <div className="track-duration">
+                        {track.duration_ms && Math.floor(track.duration_ms / 60000)}:
+                        {track.duration_ms && String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
+                      </div>
+                      <div className="result-actions">
+                        <button 
+                          className="result-action-btn primary"
+                          onClick={() => window.open(track.url, '_blank')}
+                          title="Spotify에서 열기"
+                        >
+                          <Play size={16} />
+                        </button>
+                        <button 
+                          className={`result-action-btn ${likedSongs.has(track.song_id) ? 'liked' : ''}`}
+                          onClick={() => handleLikeToggle(track.song_id)}
+                          title="좋아요"
+                        >
+                          <Heart 
+                            size={16} 
+                            fill={likedSongs.has(track.song_id) ? 'currentColor' : 'none'}
+                          />
+                        </button>
+                        <button 
+                          className="result-action-btn" 
+                          onClick={() => handleAddToPlaylist(track)}
+                          title="플레이리스트에 추가"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-          <div className="result-info">
-            <p className="result-title">
-              {track.name}
-              {/* DB 저장 상태 표시 */}
-              {!track.song_id && (
-                <span style={{ 
-                  color: 'orange', 
-                  fontSize: '0.7rem', 
-                  marginLeft: '8px',
-                  fontWeight: 'normal'
-                }}>
-                  (추가 불가)
-                </span>
-              )}
-            </p>
-            <p className="result-artist">{track.artists?.join(', ')}</p>
-            <p className="result-details">{track.album}</p>
-          </div>
-          <div className="track-duration">
-            {track.duration_ms && Math.floor(track.duration_ms / 60000)}:
-            {track.duration_ms && String(Math.floor((track.duration_ms % 60000) / 1000)).padStart(2, '0')}
-          </div>
-          {renderTrackActions(track)}
-        </div>
-      ))}
-    </div>
-  </div>
-)}
 
             {/* 아티스트 섹션 */}
             {filteredResults.artists.length > 0 && (

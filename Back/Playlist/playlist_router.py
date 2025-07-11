@@ -351,112 +351,236 @@ async def add_song_to_playlist(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(provide_session)
 ):
-    """플레이리스트에 노래 추가"""
+    """플레이리스트에 노래 추가 - 디버깅 강화"""
+    
+    # 모든 입력 데이터 로깅
+    print(f"\n=== 플레이리스트 노래 추가 요청 ===")
+    print(f"playlist_id: {playlist_id} (type: {type(playlist_id)})")
+    print(f"song_data: {song_data}")
+    print(f"song_data.song_id: {song_data.song_id} (type: {type(song_data.song_id)})")
+    print(f"current_user.id: {current_user.id}")
+    print(f"================================\n")
+    
     try:
-        logger.info(f"플레이리스트 {playlist_id}에 노래 추가 시도: {song_data.song_id}")
-
-        # 0. song_id 유효성 사전 검사 - 수정된 부분
-        if not song_data.song_id or not isinstance(song_data.song_id, int) or song_data.song_id <= 0:
-            logger.error(f"Invalid song_id: {song_data.song_id}")
+        # 0. 기본 검증
+        print("🔍 Step 0: 기본 검증 시작")
+        
+        if not song_data:
+            print("❌ song_data가 None입니다")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="올바르지 않은 song_id입니다 (양의 정수여야 함)"
+                detail="노래 데이터가 없습니다."
             )
-
-        songIdNum = song_data.song_id  # int로 그대로 사용
-
+        
+        if not hasattr(song_data, 'song_id') or song_data.song_id is None:
+            print("❌ song_id가 없습니다")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="song_id가 필요합니다."
+            )
+        
+        # song_id 타입 확인 및 변환
+        try:
+            songIdNum = int(song_data.song_id)
+            print(f"✅ song_id 변환 성공: {songIdNum}")
+        except (ValueError, TypeError) as e:
+            print(f"❌ song_id 변환 실패: {song_data.song_id} -> {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"유효하지 않은 song_id입니다: {song_data.song_id}"
+            )
+        
+        if songIdNum <= 0:
+            print(f"❌ song_id가 0 이하입니다: {songIdNum}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="song_id는 양수여야 합니다."
+            )
+        
+        print("✅ Step 0 완료: 기본 검증 통과")
+        
         # 1. 플레이리스트 권한 확인
-        playlist_result = await db.execute(
-            select(Playlist).where(
-                and_(
-                    Playlist.id == playlist_id,
-                    Playlist.user_id == current_user.id
+        print("🔍 Step 1: 플레이리스트 권한 확인 시작")
+        
+        try:
+            playlist_result = await db.execute(
+                select(Playlist).where(
+                    and_(
+                        Playlist.id == playlist_id,
+                        Playlist.user_id == current_user.id
+                    )
                 )
             )
-        )
-        playlist = playlist_result.scalars().first()
-        if not playlist:
-            logger.warning(f"플레이리스트 {playlist_id} 권한 없음 또는 존재하지 않음")
+            playlist = playlist_result.scalars().first()
+            
+            print(f"📝 플레이리스트 쿼리 결과: {playlist}")
+            
+            if not playlist:
+                print(f"❌ 플레이리스트 {playlist_id} 찾을 수 없음 또는 권한 없음")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="해당 플레이리스트가 없거나 수정 권한이 없습니다."
+                )
+            
+            print(f"✅ Step 1 완료: 플레이리스트 확인됨 - {playlist.title}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Step 1 DB 오류: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 플레이리스트가 없거나 수정 권한이 없습니다."
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"플레이리스트 확인 중 DB 오류: {str(e)}"
             )
 
         # 2. 노래 존재 확인
-        song_result = await db.execute(
-            select(Song).where(Song.id == songIdNum)
-        )
-        song = song_result.scalars().first()
-        if not song:
-            logger.warning(f"노래 {songIdNum} 찾을 수 없음")
+        print("🔍 Step 2: 노래 존재 확인 시작")
+        
+        try:
+            song_result = await db.execute(
+                select(Song).where(Song.id == songIdNum)
+            )
+            song = song_result.scalars().first()
+            
+            print(f"📝 노래 쿼리 결과: {song}")
+            
+            if not song:
+                print(f"❌ 노래 {songIdNum} 찾을 수 없음")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"해당 노래(song_id: {songIdNum})를 찾을 수 없습니다."
+                )
+            
+            print(f"✅ Step 2 완료: 노래 확인됨 - {song.title}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Step 2 DB 오류: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 노래(song_id)를 찾을 수 없습니다."
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"노래 확인 중 DB 오류: {str(e)}"
             )
 
         # 3. 중복 확인
-        existing_result = await db.execute(
-            select(PlaylistSong).where(
-                and_(
-                    PlaylistSong.playlist_id == playlist_id,
-                    PlaylistSong.song_id == songIdNum
+        print("🔍 Step 3: 중복 확인 시작")
+        
+        try:
+            existing_result = await db.execute(
+                select(PlaylistSong).where(
+                    and_(
+                        PlaylistSong.playlist_id == playlist_id,
+                        PlaylistSong.song_id == songIdNum
+                    )
                 )
             )
-        )
-        if existing_result.scalars().first():
-            logger.info(f"노래 {songIdNum}가 이미 플레이리스트 {playlist_id}에 존재")
+            existing_song = existing_result.scalars().first()
+            
+            print(f"📝 중복 확인 결과: {existing_song}")
+            
+            if existing_song:
+                print(f"⚠️ 이미 존재하는 노래입니다")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="이미 이 플레이리스트에 추가된 노래입니다."
+                )
+            
+            print("✅ Step 3 완료: 중복 없음")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Step 3 DB 오류: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="이미 이 플레이리스트에 추가된 노래입니다."
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"중복 확인 중 DB 오류: {str(e)}"
             )
 
-        # 4. 다음 position 계산
-        max_position_result = await db.execute(
-            select(func.coalesce(func.max(PlaylistSong.position), 0))
-            .where(PlaylistSong.playlist_id == playlist_id)
-        )
-        max_position = max_position_result.scalar() or 0
+        # 4. position 계산
+        print("🔍 Step 4: position 계산 시작")
+        
+        try:
+            max_position_result = await db.execute(
+                select(func.coalesce(func.max(PlaylistSong.position), 0))
+                .where(PlaylistSong.playlist_id == playlist_id)
+            )
+            max_position = max_position_result.scalar() or 0
+            new_position = max_position + 1
+            
+            print(f"📝 최대 position: {max_position}, 새 position: {new_position}")
+            print("✅ Step 4 완료: position 계산됨")
+            
+        except Exception as e:
+            print(f"❌ Step 4 DB 오류: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Position 계산 중 DB 오류: {str(e)}"
+            )
 
         # 5. 노래 추가
-        new_playlist_song = PlaylistSong(
-            playlist_id=playlist_id,
-            song_id=songIdNum,
-            position=max_position + 1,
-            added_at=datetime.utcnow()
-        )
+        print("🔍 Step 5: 노래 추가 시작")
+        
+        try:
+            new_playlist_song = PlaylistSong(
+                playlist_id=playlist_id,
+                song_id=songIdNum,
+                position=new_position,
+                added_at=datetime.utcnow()
+            )
+            
+            print(f"📝 새 PlaylistSong 객체: {new_playlist_song}")
+            
+            db.add(new_playlist_song)
+            print("📝 DB에 추가됨, 커밋 시도...")
+            
+            await db.commit()
+            print("✅ Step 5 완료: 커밋 성공")
+            
+        except Exception as e:
+            print(f"❌ Step 5 DB 오류: {str(e)}")
+            print(f"❌ 상세 에러 타입: {type(e)}")
+            import traceback
+            print(f"❌ 상세 스택 트레이스:\n{traceback.format_exc()}")
+            
+            await db.rollback()
+            
+            # 구체적인 에러 메시지 제공
+            error_str = str(e).lower()
+            if "foreign key" in error_str or "constraint" in error_str:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"데이터 무결성 오류: {str(e)}"
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"노래 추가 중 DB 오류: {str(e)}"
+                )
 
-        db.add(new_playlist_song)
-        await db.commit()
-
-        logger.info(f"노래 추가 성공: playlist_id={playlist_id}, song_id={songIdNum}, position={max_position + 1}")
+        print(f"🎉 모든 단계 완료! playlist_id={playlist_id}, song_id={songIdNum}, position={new_position}")
 
         return {
             "success": True,
             "message": "플레이리스트에 노래가 추가되었습니다.",
             "song_id": songIdNum,
-            "position": max_position + 1
+            "position": new_position
         }
 
     except HTTPException:
+        # HTTPException은 그대로 다시 발생
         raise
     except Exception as e:
-        await db.rollback()
-        logger.error(f"노래 추가 중 예외 발생: playlist_id={playlist_id}, song_id={song_data.song_id}, error={str(e)}")
-        
-        # 상세한 에러 로깅
+        # 예상치 못한 에러
+        print(f"💥 예상치 못한 전체 오류: {str(e)}")
+        print(f"💥 에러 타입: {type(e)}")
         import traceback
-        logger.error(f"상세한 에러 정보: {traceback.format_exc()}")
-
-        # foreign key 오류 등 상세한 안내 제공
-        if "foreign key" in str(e).lower() or "violates foreign key constraint" in str(e).lower():
-            raise HTTPException(
-                status_code=400,
-                detail="데이터베이스 무결성 오류: 유효하지 않은 song_id이거나 데이터가 DB에 저장되지 않았습니다."
-            )
-
+        print(f"💥 전체 스택 트레이스:\n{traceback.format_exc()}")
+        
+        await db.rollback()
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="노래 추가 중 서버 내부 오류가 발생했습니다."
+            detail=f"예상치 못한 서버 오류: {str(e)}"
         )
 
 # 플레이리스트에서 노래 삭제
