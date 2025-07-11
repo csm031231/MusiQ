@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import traceback
 import logging
 from datetime import datetime
-import httpx
+import httpx #모듈 깔았음
 import os
 
 # 로거 설정
