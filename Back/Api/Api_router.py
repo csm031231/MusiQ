@@ -342,7 +342,7 @@ async def search_result(query: str, db: AsyncSession = Depends(provide_session))
         error_message = f"Error: {response.status_code}, {response.text}"
         return error_message
 
-# 🆕 새로 추가: 앨범 트랙 조회 API
+# 새로 추가: 앨범 트랙 조회 API
 @router.get("/album/{album_id}/tracks")
 async def get_album_tracks(album_id: str, db: AsyncSession = Depends(provide_session)):
     """

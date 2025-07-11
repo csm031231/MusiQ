@@ -5,17 +5,14 @@ from core.models import User, Playlist, PlaylistSong, Song, UserLikedSong, Artis
 from User.user_router import get_current_user
 from Playlist.dto import (
     PlaylistCreate, PlaylistResponse, PlaylistUpdate, 
-    PlaylistSongAdd, PlaylistSongResponse, AlbumAddToPlaylist
+    PlaylistSongAdd, PlaylistSongResponse
 )
 from typing import List, Optional
 from sqlalchemy.future import select
 from sqlalchemy import and_, delete, func
-from pydantic import BaseModel
 import traceback
 import logging
 from datetime import datetime
-from Api.crud import save_track_to_db
-from Api.Api_router import get_album_tracks
 
 # 로거 설정
 logging.basicConfig(level=logging.INFO)
@@ -353,7 +350,7 @@ async def add_song_to_playlist(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(provide_session)
 ):
-    """플레이리스트에 단일 노래 추가 - 간단 버전"""
+    """플레이리스트에 단일 노래 추가"""
     
     print(f"\n=== 단일 노래 추가 시작 ===")
     print(f"playlist_id: {playlist_id}")
@@ -401,16 +398,12 @@ async def add_song_to_playlist(
         max_position = max_position_result.scalar() or 0
         new_position = max_position + 1
         
-        # 6. 노래 추가 - 앨범 그룹 필드는 기본값으로 설정
+        # 6. 노래 추가 (단순화된 버전)
         new_playlist_song = PlaylistSong(
             playlist_id=playlist_id,
             song_id=song_data.song_id,
             position=new_position,
-            added_at=datetime.utcnow(),
-            # 앨범 그룹 관련 필드들은 기본값(None/False)으로 설정
-            album_group_id=None,
-            album_group_name=None,
-            is_album_group=False
+            added_at=datetime.utcnow()
         )
         
         db.add(new_playlist_song)
@@ -430,8 +423,7 @@ async def add_song_to_playlist(
     except Exception as e:
         await db.rollback()
         print(f"❌ 예상치 못한 오류: {str(e)}")
-        import traceback
-        print(f"스택 트레이스: {traceback.format_exc()}")
+        traceback.print_exc()
         raise HTTPException(500, f"서버 오류: {str(e)}")
     
     print(f"=== 단일 노래 추가 완료 ===\n")
@@ -503,8 +495,7 @@ async def remove_song_from_playlist(
             detail=f"노래 삭제 중 오류가 발생했습니다: {str(e)}"
         )
 
-
-# 노래 좋아요 추가/삭제 (수정된 부분)
+# 노래 좋아요 추가/삭제
 @router.post("/like-song/{song_id}")
 async def toggle_like_song(
     song_id: int,
@@ -541,7 +532,7 @@ async def toggle_like_song(
         liked_song = liked_result.scalars().first()
         
         if liked_song:
-            # 좋아요 취소 (수정된 부분)
+            # 좋아요 취소
             await db.execute(
                 delete(UserLikedSong).where(
                     and_(
@@ -642,7 +633,7 @@ async def get_liked_songs(
             detail=f"좋아요한 노래 목록 조회 중 오류가 발생했습니다: {str(e)}"
         )
 
-# 플레이리스트 삭제 (수정된 부분)
+# 플레이리스트 삭제
 @router.delete("/{playlist_id}")
 async def delete_playlist(
     playlist_id: int,
@@ -679,7 +670,7 @@ async def delete_playlist(
         )
         deleted_songs_count = delete_songs_result.rowcount
         
-        # 3. 플레이리스트 삭제 (수정된 부분 - delete 쿼리 사용)
+        # 3. 플레이리스트 삭제
         await db.execute(
             delete(Playlist).where(
                 and_(
@@ -710,86 +701,84 @@ async def delete_playlist(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"플레이리스트 삭제 중 오류가 발생했습니다: {str(e)}"
         )
-        
-# playlist_router.py - 앨범 추가용 별도 엔드포인트
 
-@router.post("/{playlist_id}/add-album")
-async def add_album_to_playlist(
+# 플레이리스트 노래 순서 변경
+@router.put("/{playlist_id}/songs/{song_id}/position")
+async def update_song_position(
     playlist_id: int,
-    album_data: AlbumAddToPlaylist,  # DTO에 album_id 필드 있어야 함
+    song_id: int,
+    new_position: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(provide_session)
 ):
-    """플레이리스트에 앨범 전체 추가 - 별도 엔드포인트"""
-    
-    print(f"\n=== 앨범 추가 시작 ===")
-    print(f"playlist_id: {playlist_id}")
-    print(f"album_id: {album_data.album_id}")
-    
+    """플레이리스트 내 노래 순서 변경"""
     try:
-        # 앨범 트랙들 가져오기
-        tracks = await get_album_tracks(album_data.album_id)  # Spotify API 호출
+        logger.info(f"노래 {song_id} 위치 변경: {new_position}")
         
-        if not tracks:
-            raise HTTPException(404, "앨범 트랙을 찾을 수 없습니다")
+        # 플레이리스트 권한 확인
+        playlist_result = await db.execute(
+            select(Playlist).where(
+                and_(Playlist.id == playlist_id, Playlist.user_id == current_user.id)
+            )
+        )
+        if not playlist_result.scalars().first():
+            raise HTTPException(404, "플레이리스트를 찾을 수 없거나 권한이 없습니다")
         
-        # 그룹 ID 생성
-        album_group_id = f"album_{album_data.album_id}_{int(datetime.utcnow().timestamp())}"
-        
-        added_count = 0
-        skipped_count = 0
-        
-        for track in tracks:
-            # 각 트랙을 DB에 저장하고 플레이리스트에 추가
-            song_id = await save_track_to_db(db, track, "spotify")
-            
-            if song_id:
-                # 중복 확인
-                existing = await db.execute(
-                    select(PlaylistSong).where(
-                        and_(
-                            PlaylistSong.playlist_id == playlist_id,
-                            PlaylistSong.song_id == song_id
-                        )
-                    )
+        # 현재 노래의 위치 확인
+        current_song_result = await db.execute(
+            select(PlaylistSong).where(
+                and_(
+                    PlaylistSong.playlist_id == playlist_id,
+                    PlaylistSong.song_id == song_id
                 )
-                
-                if not existing.scalars().first():
-                    # position 계산
-                    max_pos_result = await db.execute(
-                        select(func.coalesce(func.max(PlaylistSong.position), 0))
-                        .where(PlaylistSong.playlist_id == playlist_id)
+            )
+        )
+        current_song = current_song_result.scalars().first()
+        if not current_song:
+            raise HTTPException(404, "플레이리스트에서 노래를 찾을 수 없습니다")
+        
+        old_position = current_song.position
+        
+        if old_position == new_position:
+            return {"success": True, "message": "위치가 동일합니다"}
+        
+        # 다른 노래들의 위치 조정
+        if old_position < new_position:
+            # 아래로 이동: old_position+1 ~ new_position 사이의 노래들을 위로 이동
+            await db.execute(
+                PlaylistSong.__table__.update().where(
+                    and_(
+                        PlaylistSong.playlist_id == playlist_id,
+                        PlaylistSong.position > old_position,
+                        PlaylistSong.position <= new_position
                     )
-                    new_position = (max_pos_result.scalar() or 0) + 1
-                    
-                    # 앨범 그룹으로 추가
-                    playlist_song = PlaylistSong(
-                        playlist_id=playlist_id,
-                        song_id=song_id,
-                        position=new_position,
-                        album_group_id=album_group_id,
-                        album_group_name=track.get('album_name'),
-                        is_album_group=True
+                ).values(position=PlaylistSong.position - 1)
+            )
+        else:
+            # 위로 이동: new_position ~ old_position-1 사이의 노래들을 아래로 이동
+            await db.execute(
+                PlaylistSong.__table__.update().where(
+                    and_(
+                        PlaylistSong.playlist_id == playlist_id,
+                        PlaylistSong.position >= new_position,
+                        PlaylistSong.position < old_position
                     )
-                    
-                    db.add(playlist_song)
-                    added_count += 1
-                else:
-                    skipped_count += 1
+                ).values(position=PlaylistSong.position + 1)
+            )
+        
+        # 대상 노래의 위치 업데이트
+        current_song.position = new_position
         
         await db.commit()
         
         return {
             "success": True,
-            "message": f"앨범이 추가되었습니다",
-            "added_count": added_count,
-            "skipped_count": skipped_count,
-            "album_group_id": album_group_id
+            "message": f"노래 위치가 {old_position}에서 {new_position}으로 변경되었습니다"
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
-        print(f"❌ 앨범 추가 오류: {str(e)}")
-        raise HTTPException(500, f"앨범 추가 중 오류: {str(e)}")
-    
-    print(f"=== 앨범 추가 완료 ===\n")
+        logger.error(f"위치 변경 오류: {str(e)}")
+        raise HTTPException(500, f"위치 변경 중 오류가 발생했습니다: {str(e)}")
