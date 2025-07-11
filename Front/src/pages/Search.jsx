@@ -1,4 +1,4 @@
-// src/pages/Search.jsx
+// src/pages/Search.jsx - 앨범 플레이리스트 추가 기능만 제거
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search as SearchIcon, Play, Heart, Plus, User, Music, Disc3, X, Check } from 'lucide-react';
@@ -15,15 +15,15 @@ const Search = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   
-  // 새로 추가된 상태들
+  // 트랙 관련 상태들만 유지 (앨범 관련 상태 제거)
   const [likedSongs, setLikedSongs] = useState(new Set());
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [selectedSong, setSelectedSong] = useState(null);
-  const [selectedAlbum, setSelectedAlbum] = useState(null); // 앨범 선택 상태 추가
+  // const [selectedAlbum, setSelectedAlbum] = useState(null); // 앨범 선택 상태 제거
   const [playlists, setPlaylists] = useState([]);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [isAddingAlbum, setIsAddingAlbum] = useState(false); // 앨범 추가 진행 상태
+  // const [isAddingAlbum, setIsAddingAlbum] = useState(false); // 앨범 추가 진행 상태 제거
 
   // API 클라이언트 설정
   const apiClient = axios.create({
@@ -40,7 +40,7 @@ const Search = () => {
     return config;
   });
 
-  // 기존 검색 API 호출 함수
+  // 기존 검색 API 호출 함수 (유지)
   const searchMusic = async (query) => {
     if (!query || !query.trim()) {
       throw new Error('검색어를 입력해주세요.');
@@ -66,7 +66,7 @@ const Search = () => {
     }
   };
 
-  // 앨범 트랙 목록 가져오기 API
+  // 앨범 트랙 목록 가져오기 API (유지 - 조회용)
   const getAlbumTracks = async (albumId) => {
     try {
       console.log(`앨범 트랙 조회 시작: ${albumId}`);
@@ -87,7 +87,7 @@ const Search = () => {
     }
   };
 
-  // 좋아요 토글 함수
+  // 좋아요 토글 함수 (유지)
   const handleLikeToggle = async (songId) => {
     const token = localStorage.getItem('accessToken');
     if (!token) {
@@ -119,7 +119,7 @@ const Search = () => {
     }
   };
 
-  // 트랙을 플레이리스트에 추가하는 모달 열기
+  // 트랙을 플레이리스트에 추가하는 모달 열기 (유지)
   const handleAddToPlaylist = (song) => {
     const token = localStorage.getItem('accessToken');
     if (!token) {
@@ -128,26 +128,14 @@ const Search = () => {
     }
 
     setSelectedSong(song);
-    setSelectedAlbum(null); // 트랙 추가 시 앨범 선택 초기화
     setShowPlaylistModal(true);
     fetchPlaylists();
   };
 
-  // 앨범을 플레이리스트에 추가하는 모달 열기
-  const handleAddAlbumToPlaylist = (album) => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
+  // 앨범을 플레이리스트에 추가하는 모달 열기 함수 제거
+  // const handleAddAlbumToPlaylist = (album) => { ... } // 전체 삭제
 
-    setSelectedAlbum(album);
-    setSelectedSong(null); // 앨범 추가 시 트랙 선택 초기화
-    setShowPlaylistModal(true);
-    fetchPlaylists();
-  };
-
-  // 플레이리스트 목록 가져오기
+  // 플레이리스트 목록 가져오기 (유지)
   const fetchPlaylists = async () => {
     try {
       const response = await apiClient.get('/playlists/my-playlists');
@@ -158,12 +146,12 @@ const Search = () => {
     }
   };
 
-  // 새 플레이리스트 생성
+  // 새 플레이리스트 생성 (트랙만 처리하도록 수정)
   const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) return;
 
     try {
-      const itemName = selectedSong?.name || selectedAlbum?.name;
+      const itemName = selectedSong?.name; // 앨범 처리 제거
       const response = await apiClient.post('/playlists/', {
         title: newPlaylistName.trim(),
         description: `${itemName}에서 생성됨`
@@ -174,12 +162,8 @@ const Search = () => {
       setShowCreateForm(false);
       await fetchPlaylists();
       
-      if (response.data?.id) {
-        if (selectedSong) {
-          await addSongToPlaylist(response.data.id);
-        } else if (selectedAlbum) {
-          await addAlbumToPlaylist(response.data.id);
-        }
+      if (response.data?.id && selectedSong) {
+        await addSongToPlaylist(response.data.id);
       }
       
     } catch (error) {
@@ -188,9 +172,8 @@ const Search = () => {
     }
   };
 
-  // 플레이리스트에 노래 추가
+  // 플레이리스트에 노래 추가 (유지)
   const addSongToPlaylist = async (playlistId) => {
-    // 백엔드에서 song_id를 제공하므로 이를 사용
     if (!selectedSong?.song_id) {
       alert('노래 정보를 찾을 수 없습니다.');
       return;
@@ -198,7 +181,7 @@ const Search = () => {
   
     try {
       const response = await apiClient.post(`/playlists/${playlistId}/songs`, {
-        song_id: selectedSong.song_id // Search API에서 제공하는 song_id 사용
+        song_id: selectedSong.song_id
       });
       
       console.log('노래 추가 성공:', response.data);
@@ -215,73 +198,10 @@ const Search = () => {
     }
   };
 
-  // 플레이리스트에 앨범 추가 (앨범의 모든 트랙 추가)
-  const addAlbumToPlaylist = async (playlistId) => {
-    if (!selectedAlbum?.id) {
-      alert('앨범 정보를 찾을 수 없습니다.');
-      return;
-    }
+  // 플레이리스트에 앨범 추가 함수 완전 제거
+  // const addAlbumToPlaylist = async (playlistId) => { ... } // 전체 삭제
 
-    try {
-      setIsAddingAlbum(true);
-      
-      // 1. 앨범의 트랙 목록 가져오기
-      console.log('앨범 트랙 목록 조회 중...');
-      const tracks = await getAlbumTracks(selectedAlbum.id);
-      
-      if (!tracks || tracks.length === 0) {
-        alert('앨범에 트랙이 없습니다.');
-        return;
-      }
-
-      console.log(`앨범 "${selectedAlbum.name}"의 ${tracks.length}개 트랙을 플레이리스트에 추가 중...`);
-      
-      // 2. 각 트랙을 플레이리스트에 추가
-      let successCount = 0;
-      let skipCount = 0;
-      
-      for (const track of tracks) {
-        try {
-          if (track.song_id) {
-            await apiClient.post(`/playlists/${playlistId}/songs`, {
-              song_id: track.song_id
-            });
-            successCount++;
-          }
-        } catch (error) {
-          if (error.response?.data?.detail?.includes('already in playlist')) {
-            skipCount++;
-            console.log(`트랙 "${track.name}"은 이미 플레이리스트에 있습니다.`);
-          } else {
-            console.error(`트랙 "${track.name}" 추가 실패:`, error);
-          }
-        }
-      }
-      
-      // 3. 결과 메시지 표시
-      if (successCount > 0) {
-        let message = `앨범 "${selectedAlbum.name}"의 ${successCount}곡이 플레이리스트에 추가되었습니다!`;
-        if (skipCount > 0) {
-          message += `\n(${skipCount}곡은 이미 플레이리스트에 있어서 건너뛰었습니다.)`;
-        }
-        alert(message);
-      } else if (skipCount > 0) {
-        alert('모든 트랙이 이미 플레이리스트에 있습니다.');
-      } else {
-        alert('앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
-      }
-      
-      setShowPlaylistModal(false);
-      
-    } catch (error) {
-      console.error('앨범 추가 실패:', error);
-      alert(error.message || '앨범을 플레이리스트에 추가하는 중 오류가 발생했습니다.');
-    } finally {
-      setIsAddingAlbum(false);
-    }
-  };
-
-  // 에러 처리 함수
+  // 에러 처리 함수 (유지)
   const getErrorMessage = (error) => {
     if (error.code === 'ECONNABORTED') {
       return '요청 시간이 초과되었습니다.';
@@ -296,7 +216,7 @@ const Search = () => {
     }
   };
 
-  // URL 파라미터에서 검색어 추출
+  // URL 파라미터에서 검색어 추출 (유지)
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const query = urlParams.get('q');
@@ -307,7 +227,7 @@ const Search = () => {
     }
   }, [location.search]);
 
-  // 검색 실행 함수
+  // 검색 실행 함수 (유지)
   const performSearch = async (query) => {
     if (!query || !query.trim()) {
       return;
@@ -329,7 +249,7 @@ const Search = () => {
     }
   };
 
-  // 필터된 결과 가져오기
+  // 필터된 결과 가져오기 (유지)
   const getFilteredResults = () => {
     switch (activeFilter) {
       case 'albums':
@@ -346,7 +266,7 @@ const Search = () => {
   const filteredResults = getFilteredResults();
   const totalResults = searchResults.albums.length + searchResults.tracks.length + searchResults.artists.length;
 
-  // 필터 옵션
+  // 필터 옵션 (유지)
   const filterOptions = [
     { id: 'all', name: '전체', icon: SearchIcon, count: totalResults },
     { id: 'albums', name: '앨범', icon: Disc3, count: searchResults.albums.length },
@@ -404,7 +324,7 @@ const Search = () => {
           </div>
 
           <div className="search-results">
-            {/* 앨범 섹션 */}
+            {/* 앨범 섹션 - 플레이리스트 추가 버튼만 제거 */}
             {filteredResults.albums.length > 0 && (
               <div className="result-section">
                 <h3 className="section-title">앨범 ({filteredResults.albums.length})</h3>
@@ -438,13 +358,14 @@ const Search = () => {
                         <button className="result-action-btn" title="좋아요">
                           <Heart size={16} />
                         </button>
-                        <button 
+                        {/* 앨범 플레이리스트 추가 버튼 제거 */}
+                        {/* <button 
                           className="result-action-btn" 
                           onClick={() => handleAddAlbumToPlaylist(album)}
                           title="앨범을 플레이리스트에 추가"
                         >
                           <Plus size={16} />
-                        </button>
+                        </button> */}
                       </div>
                     </div>
                   ))}
@@ -452,7 +373,7 @@ const Search = () => {
               </div>
             )}
 
-            {/* 트랙 섹션 */}
+            {/* 트랙 섹션 (유지) */}
             {filteredResults.tracks.length > 0 && (
               <div className="result-section">
                 <h3 className="section-title">트랙 ({filteredResults.tracks.length})</h3>
@@ -507,7 +428,7 @@ const Search = () => {
               </div>
             )}
 
-            {/* 아티스트 섹션 */}
+            {/* 아티스트 섹션 (유지) */}
             {filteredResults.artists.length > 0 && (
               <div className="result-section">
                 <h3 className="section-title">아티스트 ({filteredResults.artists.length})</h3>
@@ -589,7 +510,7 @@ const Search = () => {
         </div>
       )}
 
-      {/* 플레이리스트 선택 모달 */}
+      {/* 플레이리스트 선택 모달 - 트랙만 처리하도록 수정 */}
       {showPlaylistModal && (
         <div className="playlist-modal-overlay" onClick={() => setShowPlaylistModal(false)}>
           <div className="playlist-modal" onClick={(e) => e.stopPropagation()}>
@@ -611,12 +532,7 @@ const Search = () => {
                     <span>by {selectedSong.artists?.join(', ')}</span>
                   </>
                 )}
-                {selectedAlbum && (
-                  <>
-                    <strong>{selectedAlbum.name} (앨범)</strong>
-                    <span>by {selectedAlbum.artists?.join(', ')} • {selectedAlbum.total_tracks}곡</span>
-                  </>
-                )}
+                {/* 앨범 표시 부분 제거 */}
               </div>
               
               {!showCreateForm && (
@@ -664,16 +580,13 @@ const Search = () => {
                       onClick={() => {
                         if (selectedSong) {
                           addSongToPlaylist(playlist.id);
-                        } else if (selectedAlbum) {
-                          addAlbumToPlaylist(playlist.id);
                         }
+                        // 앨범 처리 부분 제거
                       }}
                     >
                       <Music size={16} />
                       <span>{playlist.title}</span>
-                      {isAddingAlbum && selectedAlbum && (
-                        <span className="adding-indicator">추가 중...</span>
-                      )}
+                      {/* 앨범 추가 진행 상황 표시 제거 */}
                     </div>
                   ))
                 )}

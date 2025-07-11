@@ -191,7 +191,7 @@ async def get_playlist_songs(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(provide_session)
 ):
-    """플레이리스트의 노래 목록 조회"""
+    """플레이리스트의 노래 목록 조회 - 앨범 정보 제거"""
     try:
         logger.info(f"플레이리스트 {playlist_id} 노래 목록 조회 시작")
         
@@ -207,7 +207,6 @@ async def get_playlist_songs(
         
         playlist = playlist_result.scalars().first()
         if not playlist:
-            logger.warning(f"플레이리스트 {playlist_id} 찾을 수 없음")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Playlist not found or you don't have permission to access it"
@@ -221,7 +220,6 @@ async def get_playlist_songs(
         )
         
         playlist_songs = playlist_songs_result.scalars().all()
-        logger.info(f"플레이리스트에 {len(playlist_songs)}개 노래 발견")
         
         if not playlist_songs:
             return {
@@ -231,57 +229,41 @@ async def get_playlist_songs(
                 "all_songs": []
             }
         
-        # 3. 노래 정보 조회 (안전한 JOIN)
+        # 3. 노래 정보 조회 (앨범 정보 제거)
         song_ids = [ps.song_id for ps in playlist_songs]
         
-        try:
-            songs_result = await db.execute(
-                select(Song, Artist, Album)
-                .outerjoin(Artist, Song.artist_id == Artist.id)
-                .outerjoin(Album, Song.album_id == Album.id)
-                .where(Song.id.in_(song_ids))
-            )
-            
-            songs_data = {}
-            for row in songs_result.all():
-                song, artist, album = row
-                songs_data[song.id] = (song, artist, album)
-            
-        except Exception as query_error:
-            logger.error(f"노래 정보 조회 중 오류: {str(query_error)}")
-            # 기본 노래 정보만 조회
-            songs_result = await db.execute(
-                select(Song).where(Song.id.in_(song_ids))
-            )
-            songs_data = {song.id: (song, None, None) for song in songs_result.scalars().all()}
+        songs_result = await db.execute(
+            select(Song, Artist)
+            .outerjoin(Artist, Song.artist_id == Artist.id)
+            .where(Song.id.in_(song_ids))
+        )
+        
+        songs_data = {}
+        for row in songs_result.all():
+            song, artist = row
+            songs_data[song.id] = (song, artist)
         
         # 4. 좋아요 정보 조회
-        try:
-            liked_songs_result = await db.execute(
-                select(UserLikedSong.song_id)
-                .where(
-                    and_(
-                        UserLikedSong.user_id == current_user.id,
-                        UserLikedSong.song_id.in_(song_ids)
-                    )
+        liked_songs_result = await db.execute(
+            select(UserLikedSong.song_id)
+            .where(
+                and_(
+                    UserLikedSong.user_id == current_user.id,
+                    UserLikedSong.song_id.in_(song_ids)
                 )
             )
-            liked_song_ids = {row[0] for row in liked_songs_result.all()}
-        except Exception as like_error:
-            logger.error(f"좋아요 정보 조회 중 오류: {str(like_error)}")
-            liked_song_ids = set()
+        )
+        liked_song_ids = {row[0] for row in liked_songs_result.all()}
         
-        # 5. 결과 구성
+        # 5. 결과 구성 (앨범 정보 제거)
         all_songs = []
         for playlist_song in playlist_songs:
             song_data = songs_data.get(playlist_song.song_id)
             if not song_data:
-                logger.warning(f"노래 ID {playlist_song.song_id} 데이터 없음")
                 continue
                 
-            song, artist, album = song_data
+            song, artist = song_data
             
-            # 안전한 데이터 구성
             song_info = {
                 "id": song.id,
                 "title": song.title or "Unknown Title",
@@ -295,21 +277,11 @@ async def get_playlist_songs(
                     "id": artist.id if artist else None,
                     "name": artist.name if artist else "Unknown Artist",
                     "image_url": getattr(artist, 'image_url', None) if artist else None
-                } if artist else {
-                    "id": None,
-                    "name": "Unknown Artist",
-                    "image_url": None
-                },
-                "album": {
-                    "id": album.id if album else None,
-                    "title": album.title if album else None,
-                    "cover_url": getattr(album, 'cover_url', None) if album else None
-                } if album else None
+                }
+                # album 정보 완전 제거
             }
             
             all_songs.append(song_info)
-        
-        logger.info(f"플레이리스트 {playlist_id} 노래 목록 조회 완료: {len(all_songs)}개")
         
         return {
             "playlist_id": playlist_id,
@@ -323,24 +295,10 @@ async def get_playlist_songs(
     except Exception as e:
         logger.error(f"플레이리스트 노래 조회 오류: {str(e)}")
         traceback.print_exc()
-        
-        # 오류 발생 시 기본 응답
-        try:
-            playlist_result = await db.execute(
-                select(Playlist).where(Playlist.id == playlist_id)
-            )
-            playlist = playlist_result.scalars().first()
-            playlist_title = playlist.title if playlist else "Unknown Playlist"
-        except:
-            playlist_title = "Unknown Playlist"
-        
-        return {
-            "playlist_id": playlist_id,
-            "playlist_title": playlist_title,
-            "total_songs": 0,
-            "all_songs": [],
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"노래 목록 조회 중 오류가 발생했습니다: {str(e)}"
+        )
 
 # 플레이리스트에 단일 노래 추가
 @router.post("/{playlist_id}/songs")
@@ -350,17 +308,17 @@ async def add_song_to_playlist(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(provide_session)
 ):
-    """플레이리스트에 단일 노래 추가"""
+    """플레이리스트에 단일 노래 추가 - 개선된 버전"""
     
-    print(f"\n=== 단일 노래 추가 시작 ===")
-    print(f"playlist_id: {playlist_id}")
-    print(f"song_id: {song_data.song_id}")
-    print(f"user_id: {current_user.id}")
+    logger.info(f"단일 노래 추가 시작 - playlist_id: {playlist_id}, song_id: {song_data.song_id}, user_id: {current_user.id}")
     
     try:
-        # 1. 기본 검증
+        # 1. 입력 검증
         if not song_data.song_id or song_data.song_id <= 0:
-            raise HTTPException(400, "유효하지 않은 song_id입니다")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="유효하지 않은 song_id입니다"
+            )
         
         # 2. 플레이리스트 권한 확인
         playlist_result = await db.execute(
@@ -370,13 +328,19 @@ async def add_song_to_playlist(
         )
         playlist = playlist_result.scalars().first()
         if not playlist:
-            raise HTTPException(404, "플레이리스트를 찾을 수 없거나 권한이 없습니다")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="플레이리스트를 찾을 수 없거나 권한이 없습니다"
+            )
         
         # 3. 노래 존재 확인
         song_result = await db.execute(select(Song).where(Song.id == song_data.song_id))
         song = song_result.scalars().first()
         if not song:
-            raise HTTPException(404, "노래를 찾을 수 없습니다")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="노래를 찾을 수 없습니다"
+            )
         
         # 4. 중복 확인
         existing_result = await db.execute(
@@ -388,46 +352,53 @@ async def add_song_to_playlist(
             )
         )
         if existing_result.scalars().first():
-            raise HTTPException(400, "이미 플레이리스트에 있는 노래입니다")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이미 플레이리스트에 있는 노래입니다"
+            )
         
-        # 5. position 계산
-        max_position_result = await db.execute(
-            select(func.coalesce(func.max(PlaylistSong.position), 0))
-            .where(PlaylistSong.playlist_id == playlist_id)
-        )
-        max_position = max_position_result.scalar() or 0
-        new_position = max_position + 1
+        # 5. 안전한 position 계산 (트랜잭션 내에서)
+        async with db.begin():
+            max_position_result = await db.execute(
+                select(func.coalesce(func.max(PlaylistSong.position), 0))
+                .where(PlaylistSong.playlist_id == playlist_id)
+                .with_for_update()  # 락 적용
+            )
+            max_position = max_position_result.scalar() or 0
+            new_position = max_position + 1
+            
+            # 6. 노래 추가
+            new_playlist_song = PlaylistSong(
+                playlist_id=playlist_id,
+                song_id=song_data.song_id,
+                position=new_position,
+                added_at=datetime.utcnow()
+            )
+            
+            db.add(new_playlist_song)
+            # begin() 블록 종료 시 자동 커밋됨
         
-        # 6. 노래 추가 (단순화된 버전)
-        new_playlist_song = PlaylistSong(
-            playlist_id=playlist_id,
-            song_id=song_data.song_id,
-            position=new_position,
-            added_at=datetime.utcnow()
-        )
-        
-        db.add(new_playlist_song)
-        await db.commit()
-        
-        print(f"✅ 노래 추가 성공: song_id={song_data.song_id}, position={new_position}")
+        logger.info(f"노래 추가 성공: song_id={song_data.song_id}, position={new_position}")
         
         return {
             "success": True,
             "message": "플레이리스트에 노래가 추가되었습니다",
             "song_id": song_data.song_id,
-            "position": new_position
+            "position": new_position,
+            "playlist_title": playlist.title
         }
         
     except HTTPException:
         raise
     except Exception as e:
         await db.rollback()
-        print(f"❌ 예상치 못한 오류: {str(e)}")
+        logger.error(f"예상치 못한 오류: {str(e)}")
         traceback.print_exc()
-        raise HTTPException(500, f"서버 오류: {str(e)}")
-    
-    print(f"=== 단일 노래 추가 완료 ===\n")
-
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"서버 오류가 발생했습니다: {str(e)}"
+        )
+        
 # 플레이리스트에서 노래 삭제
 @router.delete("/{playlist_id}/songs/{song_id}")
 async def remove_song_from_playlist(
