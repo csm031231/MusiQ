@@ -7,14 +7,14 @@ from Playlist.dto import (
     PlaylistCreate, PlaylistResponse, PlaylistUpdate, 
     PlaylistSongAdd, PlaylistSongResponse, AlbumAddToPlaylist
 )
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 from sqlalchemy.future import select
 from sqlalchemy import and_, delete, func
 from pydantic import BaseModel
 import traceback
 import logging
 from datetime import datetime
-import httpx #모듈 깔았음
+import httpx 
 import os
 
 # 로거 설정
