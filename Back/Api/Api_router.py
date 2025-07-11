@@ -1,4 +1,5 @@
 import requests
+import asyncio
 from datetime import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,7 @@ from Api.spotify_service import get_spotify_token, get_spotify_image
 from Api.crud import save_track_to_db
 from typing import Optional
 from Api.dto import ChartResponse, SearchResponse
+
 
 router = APIRouter(
     prefix="/api",
@@ -165,6 +167,29 @@ def get_spotify_track_details_sync(track_name: str, artist_name: str) -> Optiona
         print(f"Error fetching Spotify details for {track_name} - {artist_name}: {str(e)}")
         return None
 
+async def ensure_song_id(db: AsyncSession, track_data: dict, source: str = "spotify", max_retries: int = 3) -> Optional[int]:
+    """song_id 생성을 보장하는 함수 (재시도 로직 포함)"""
+    for attempt in range(max_retries):
+        try:
+            print(f"🔄 song_id 생성 시도 {attempt + 1}/{max_retries}: {track_data.get('title', track_data.get('name'))}")
+            
+            # save_track_to_db 호출
+            song_id = await save_track_to_db(db, track_data, source)
+            
+            if song_id and song_id > 0:
+                print(f"✅ song_id 생성 성공: {song_id}")
+                return song_id
+            else:
+                print(f"⚠️ song_id 생성 실패 (시도 {attempt + 1}): {song_id}")
+                
+        except Exception as e:
+            print(f"❌ song_id 생성 중 오류 (시도 {attempt + 1}): {str(e)}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(0.1)  # 짧은 지연 후 재시도
+            
+    print(f"💥 song_id 생성 최종 실패: {track_data.get('title', track_data.get('name'))}")
+    return None
+
 @router.post("/searchPage")
 async def search_result(query: str, db: AsyncSession = Depends(provide_session)):
     URL = 'https://api.spotify.com/v1/search'
@@ -189,7 +214,7 @@ async def search_result(query: str, db: AsyncSession = Depends(provide_session))
     if response.status_code == 200:
         data = response.json()
 
-        # 앨범 처리
+        # 앨범 처리 (기존 동일)
         raw_albums = data.get('albums', {}).get('items', [])
         albums = []
         for album in raw_albums:
@@ -204,51 +229,79 @@ async def search_result(query: str, db: AsyncSession = Depends(provide_session))
             }
             albums.append(album_summary)
 
-        # 트랙 처리 (앨범 이미지 추가)
+        # 트랙 처리 - 개선된 버전
         raw_tracks = data.get('tracks', {}).get('items', [])
         tracks = []
-        for track in raw_tracks:
-            # 트랙의 앨범 이미지 가져오기
-            album_images = track.get('album', {}).get('images', [])
-            track_image = None
-            if album_images:
-                # 중간 크기 이미지 우선 선택 (300x300)
-                for img in album_images:
-                    if img.get('height') == 300:
-                        track_image = img.get('url')
-                        break
-                # 중간 크기가 없으면 첫 번째 이미지 사용
-                if not track_image:
-                    track_image = album_images[0].get('url')
-            
-            # 추가: DB에 저장할 트랙 데이터 준비 (좋아요/플레이리스트 기능용)
-            track_data_for_db = {
-                'title': track.get('name'),
-                'artist': track.get('artists', [{}])[0].get('name') if track.get('artists') else None,
-                'album': track.get('album', {}).get('name'),
-                'duration_ms': track.get('duration_ms'),
-                'preview_url': track.get('preview_url'),
-                'image_small': track_image,
-                'spotify_id': track.get('id')
-            }
-            
-            # 추가: DB에 저장하여 song_id 생성
-            song_id = await save_track_to_db(db, track_data_for_db, "spotify")
-            
-            track_summary = {
-                'id': track.get('id'),
-                'name': track.get('name'),
-                'artists': [artist.get('name') for artist in track.get('artists', [])],
-                'album': track.get('album', {}).get('name'),
-                'duration_ms': track.get('duration_ms'),
-                'preview_url': track.get('preview_url'),
-                'image': track_image,  # 앨범 이미지 추가
-                'url': track.get('external_urls', {}).get('spotify'),
-                'song_id': song_id  # 추가: 좋아요/플레이리스트 기능을 위한 DB song_id
-            }
-            tracks.append(track_summary)
+        
+        print(f"🎵 검색된 트랙 수: {len(raw_tracks)}")
+        
+        for i, track in enumerate(raw_tracks, 1):
+            try:
+                print(f"\n--- 트랙 {i}/{len(raw_tracks)} 처리 중 ---")
+                
+                # 기본 정보 검증
+                track_name = track.get('name')
+                track_artists = track.get('artists', [])
+                artist_name = track_artists[0].get('name') if track_artists else None
+                
+                if not track_name or not artist_name:
+                    print(f"⚠️ 필수 정보 누락: title={track_name}, artist={artist_name}")
+                    continue
+                
+                # 트랙의 앨범 이미지 가져오기
+                album_images = track.get('album', {}).get('images', [])
+                track_image = None
+                if album_images:
+                    for img in album_images:
+                        if img.get('height') == 300:
+                            track_image = img.get('url')
+                            break
+                    if not track_image:
+                        track_image = album_images[0].get('url')
+                
+                # DB 저장용 데이터 준비 - 필수 필드 보장
+                track_data_for_db = {
+                    'title': track_name,
+                    'artist': artist_name,
+                    'album': track.get('album', {}).get('name'),
+                    'duration_ms': track.get('duration_ms'),
+                    'preview_url': track.get('preview_url'),
+                    'image_small': track_image,
+                    'spotify_id': track.get('id')
+                }
+                
+                print(f"📝 DB 저장 데이터: {track_data_for_db}")
+                
+                # song_id 생성 (재시도 로직 포함)
+                song_id = await ensure_song_id(db, track_data_for_db, "spotify")
+                
+                # 응답 데이터 구성
+                track_summary = {
+                    'id': track.get('id'),  # Spotify ID
+                    'name': track_name,
+                    'artists': [artist.get('name') for artist in track_artists],
+                    'album': track.get('album', {}).get('name'),
+                    'duration_ms': track.get('duration_ms'),
+                    'preview_url': track.get('preview_url'),
+                    'image': track_image,
+                    'url': track.get('external_urls', {}).get('spotify'),
+                    'song_id': song_id  # None일 수도 있음
+                }
+                
+                tracks.append(track_summary)
+                
+                if song_id:
+                    print(f"✅ 트랙 처리 완료: {track_name} (song_id: {song_id})")
+                else:
+                    print(f"⚠️ 트랙 처리 완료 (song_id 없음): {track_name}")
+                    
+            except Exception as e:
+                print(f"❌ 트랙 처리 중 오류: {track.get('name', 'Unknown')} - {str(e)}")
+                import traceback
+                print(f"상세 오류: {traceback.format_exc()}")
+                continue
 
-        # 아티스트 처리
+        # 아티스트 처리 (기존 동일)
         raw_artists = data.get('artists', {}).get('items', [])
         artists = []
         for artist in raw_artists:
@@ -262,10 +315,26 @@ async def search_result(query: str, db: AsyncSession = Depends(provide_session))
             }
             artists.append(artist_summary)
 
+        # 결과 통계
+        tracks_with_song_id = [t for t in tracks if t.get('song_id')]
+        tracks_without_song_id = [t for t in tracks if not t.get('song_id')]
+        
+        print(f"""
+        📊 검색 결과 통계:
+        - 총 트랙: {len(tracks)}
+        - song_id 있음: {len(tracks_with_song_id)}
+        - song_id 없음: {len(tracks_without_song_id)}
+        """)
+
         search_Info = {
             'albums': albums,
             'tracks': tracks,
-            'artists': artists
+            'artists': artists,
+            'debug_info': {
+                'total_tracks': len(tracks),
+                'tracks_with_song_id': len(tracks_with_song_id),
+                'tracks_without_song_id': len(tracks_without_song_id)
+            }
         }
         return search_Info
 

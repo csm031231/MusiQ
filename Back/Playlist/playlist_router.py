@@ -355,12 +355,15 @@ async def add_song_to_playlist(
     try:
         logger.info(f"플레이리스트 {playlist_id}에 노래 추가 시도: {song_data.song_id}")
 
-        # 0. song_id 유효성 사전 검사
-        if not isinstance(song_data.song_id, int) or song_data.song_id <= 0:
+        # 0. song_id 유효성 사전 검사 - 수정된 부분
+        if not song_data.song_id or not isinstance(song_data.song_id, int) or song_data.song_id <= 0:
+            logger.error(f"Invalid song_id: {song_data.song_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="올바르지 않은 song_id입니다 (양의 정수여야 함)"
             )
+
+        songIdNum = song_data.song_id  # int로 그대로 사용
 
         # 1. 플레이리스트 권한 확인
         playlist_result = await db.execute(
@@ -373,6 +376,7 @@ async def add_song_to_playlist(
         )
         playlist = playlist_result.scalars().first()
         if not playlist:
+            logger.warning(f"플레이리스트 {playlist_id} 권한 없음 또는 존재하지 않음")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="해당 플레이리스트가 없거나 수정 권한이 없습니다."
@@ -380,10 +384,11 @@ async def add_song_to_playlist(
 
         # 2. 노래 존재 확인
         song_result = await db.execute(
-            select(Song).where(Song.id == song_data.song_id)
+            select(Song).where(Song.id == songIdNum)
         )
         song = song_result.scalars().first()
         if not song:
+            logger.warning(f"노래 {songIdNum} 찾을 수 없음")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="해당 노래(song_id)를 찾을 수 없습니다."
@@ -394,11 +399,12 @@ async def add_song_to_playlist(
             select(PlaylistSong).where(
                 and_(
                     PlaylistSong.playlist_id == playlist_id,
-                    PlaylistSong.song_id == song_data.song_id
+                    PlaylistSong.song_id == songIdNum
                 )
             )
         )
         if existing_result.scalars().first():
+            logger.info(f"노래 {songIdNum}가 이미 플레이리스트 {playlist_id}에 존재")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="이미 이 플레이리스트에 추가된 노래입니다."
@@ -414,7 +420,7 @@ async def add_song_to_playlist(
         # 5. 노래 추가
         new_playlist_song = PlaylistSong(
             playlist_id=playlist_id,
-            song_id=song_data.song_id,
+            song_id=songIdNum,
             position=max_position + 1,
             added_at=datetime.utcnow()
         )
@@ -422,12 +428,12 @@ async def add_song_to_playlist(
         db.add(new_playlist_song)
         await db.commit()
 
-        logger.info(f"노래 추가 성공: playlist_id={playlist_id}, song_id={song_data.song_id}, position={max_position + 1}")
+        logger.info(f"노래 추가 성공: playlist_id={playlist_id}, song_id={songIdNum}, position={max_position + 1}")
 
         return {
             "success": True,
             "message": "플레이리스트에 노래가 추가되었습니다.",
-            "song_id": song_data.song_id,
+            "song_id": songIdNum,
             "position": max_position + 1
         }
 
@@ -436,7 +442,10 @@ async def add_song_to_playlist(
     except Exception as e:
         await db.rollback()
         logger.error(f"노래 추가 중 예외 발생: playlist_id={playlist_id}, song_id={song_data.song_id}, error={str(e)}")
-        traceback.print_exc()
+        
+        # 상세한 에러 로깅
+        import traceback
+        logger.error(f"상세한 에러 정보: {traceback.format_exc()}")
 
         # foreign key 오류 등 상세한 안내 제공
         if "foreign key" in str(e).lower() or "violates foreign key constraint" in str(e).lower():

@@ -165,61 +165,64 @@ const Chart = () => {
 
   // 플레이리스트에 노래 추가 (수정된 버전)
   const addSongToPlaylist = async (playlistId) => {
-    // 차트 API에서 제공하는 song_id 확인
-    console.log('노래 추가 시도:', {
-      playlistId,
-      selectedSong,
-      song_id: selectedSong?.song_id
-    });
-
     if (!selectedSong?.song_id) {
-      console.error('song_id가 없습니다:', selectedSong);
       alert('노래 정보를 찾을 수 없습니다. (song_id 누락)');
+      console.error('selectedSong or song_id가 없음:', selectedSong);
+      return;
+    }
+  
+    const songIdNum = Number(selectedSong.song_id);
+    if (isNaN(songIdNum) || songIdNum <= 0) {
+      alert('유효하지 않은 song_id 입니다.');
+      console.error('song_id가 숫자가 아니거나 0 이하임:', selectedSong.song_id);
       return;
     }
   
     try {
-      console.log(`플레이리스트 ${playlistId}에 노래 ${selectedSong.song_id} 추가 중...`);
-      
-      const requestData = {
-        song_id: selectedSong.song_id // Chart API에서 제공하는 song_id 사용
-      };
-      
-      console.log('요청 데이터:', requestData);
-      
-      const response = await apiClient.post(`/playlists/${playlistId}/songs`, requestData);
-      
-      console.log('노래 추가 성공:', response.data);
-      
-      if (response.data && response.data.success) {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+  
+      const requestData = { song_id: songIdNum };
+  
+      const response = await apiClient.post(
+        `/playlists/${playlistId}/songs`,
+        requestData,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+  
+      if (response.data?.success) {
         alert(response.data.message || '플레이리스트에 추가되었습니다!');
       } else {
         alert('플레이리스트에 추가되었습니다!');
       }
-      
+  
       setShowPlaylistModal(false);
-      
     } catch (error) {
       console.error('노래 추가 실패:', error);
-      console.error('에러 응답:', error.response?.data);
-      
-      if (error.response?.status === 400) {
-        const errorDetail = error.response.data?.detail || '';
-        if (errorDetail.includes('already') || errorDetail.includes('exist')) {
+      const status = error.response?.status;
+      const detail = error.response?.data?.detail || '';
+  
+      if (status === 400) {
+        if (detail.includes('already') || detail.includes('exist')) {
           alert('이미 플레이리스트에 있는 노래입니다.');
-        } else if (errorDetail.includes('not found')) {
+        } else if (detail.includes('not found')) {
           alert('노래를 찾을 수 없습니다.');
         } else {
-          alert(`요청 오류: ${errorDetail}`);
+          alert(`요청 오류: ${detail}`);
         }
-      } else if (error.response?.status === 404) {
+      } else if (status === 404) {
         alert('플레이리스트를 찾을 수 없습니다.');
-      } else if (error.response?.status === 401) {
+      } else if (status === 401) {
         alert('로그인이 필요합니다.');
-      } else if (error.response?.status === 500) {
+      } else if (status === 500) {
         alert('서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        alert(`플레이리스트에 추가하는 중 오류가 발생했습니다: ${error.message}`);
+        alert(`오류가 발생했습니다: ${error.message}`);
       }
     }
   };
