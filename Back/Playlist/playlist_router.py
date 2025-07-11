@@ -7,13 +7,15 @@ from Playlist.dto import (
     PlaylistCreate, PlaylistResponse, PlaylistUpdate, 
     PlaylistSongAdd, PlaylistSongResponse, AlbumAddToPlaylist
 )
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy.future import select
 from sqlalchemy import and_, delete, func
 from pydantic import BaseModel
 import traceback
 import logging
 from datetime import datetime
+import httpx
+import os
 
 # 로거 설정
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +25,172 @@ router = APIRouter(
     prefix="/playlists",
     tags=["playlists"]
 )
+
+# Spotify API 관련 함수들
+async def get_spotify_access_token() -> str:
+    """Spotify API 액세스 토큰 가져오기"""
+    try:
+        client_id = os.getenv("SPOTIFY_CLIENT_ID")
+        client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
+        
+        if not client_id or not client_secret:
+            raise ValueError("Spotify 클라이언트 정보가 설정되지 않았습니다")
+        
+        auth_url = "https://accounts.spotify.com/api/token"
+        auth_data = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(auth_url, data=auth_data)
+            
+            if response.status_code != 200:
+                raise HTTPException(500, "Spotify 토큰 획득 실패")
+            
+            token_data = response.json()
+            return token_data.get("access_token")
+            
+    except Exception as e:
+        logger.error(f"Spotify 토큰 오류: {str(e)}")
+        raise HTTPException(500, f"Spotify API 인증 실패: {str(e)}")
+
+async def get_album_tracks(album_id: str) -> List[Dict]:
+    """Spotify API에서 앨범의 트랙 목록을 가져오는 함수"""
+    try:
+        spotify_token = await get_spotify_access_token()
+        
+        headers = {
+            "Authorization": f"Bearer {spotify_token}",
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            # 앨범 정보 가져오기
+            album_response = await client.get(
+                f"https://api.spotify.com/v1/albums/{album_id}",
+                headers=headers
+            )
+            
+            if album_response.status_code != 200:
+                logger.error(f"Spotify 앨범 조회 오류: {album_response.status_code}")
+                return []
+            
+            album_data = album_response.json()
+            album_name = album_data.get('name', 'Unknown Album')
+            album_cover = album_data.get('images', [{}])[0].get('url') if album_data.get('images') else None
+            
+            # 트랙 목록 가져오기
+            tracks_response = await client.get(
+                f"https://api.spotify.com/v1/albums/{album_id}/tracks",
+                headers=headers,
+                params={"limit": 50}
+            )
+            
+            if tracks_response.status_code != 200:
+                logger.error(f"Spotify 트랙 조회 오류: {tracks_response.status_code}")
+                return []
+            
+            tracks_data = tracks_response.json()
+            tracks = []
+            
+            for track in tracks_data.get('items', []):
+                track_info = {
+                    'spotify_id': track.get('id'),
+                    'title': track.get('name'),
+                    'duration_ms': track.get('duration_ms'),
+                    'preview_url': track.get('preview_url'),
+                    'track_number': track.get('track_number'),
+                    'album_name': album_name,
+                    'album_cover': album_cover,
+                    'artists': [artist.get('name') for artist in track.get('artists', [])]
+                }
+                tracks.append(track_info)
+            
+            return tracks
+            
+    except Exception as e:
+        logger.error(f"앨범 트랙 조회 오류: {str(e)}")
+        return []
+
+async def save_track_to_db(db: AsyncSession, track_data: Dict, source: str = "spotify") -> Optional[int]:
+    """트랙 정보를 데이터베이스에 저장하고 song_id 반환"""
+    try:
+        # 이미 존재하는 노래인지 확인 (Spotify ID로)
+        if track_data.get('spotify_id'):
+            existing_song = await db.execute(
+                select(Song).where(Song.spotify_id == track_data['spotify_id'])
+            )
+            existing = existing_song.scalars().first()
+            if existing:
+                return existing.id
+        
+        # 아티스트 처리
+        artist_id = None
+        if track_data.get('artists') and len(track_data['artists']) > 0:
+            artist_name = track_data['artists'][0]  # 첫 번째 아티스트 사용
+            
+            # 아티스트 존재 확인
+            artist_result = await db.execute(
+                select(Artist).where(Artist.name == artist_name)
+            )
+            artist = artist_result.scalars().first()
+            
+            if not artist:
+                # 새 아티스트 생성
+                new_artist = Artist(
+                    name=artist_name,
+                    spotify_id=None,  # 필요시 별도로 아티스트 정보 조회
+                    image_url=None
+                )
+                db.add(new_artist)
+                await db.flush()  # ID 생성을 위해 flush
+                artist_id = new_artist.id
+            else:
+                artist_id = artist.id
+        
+        # 앨범 처리
+        album_id = None
+        if track_data.get('album_name'):
+            album_result = await db.execute(
+                select(Album).where(Album.title == track_data['album_name'])
+            )
+            album = album_result.scalars().first()
+            
+            if not album:
+                # 새 앨범 생성
+                new_album = Album(
+                    title=track_data['album_name'],
+                    cover_url=track_data.get('album_cover'),
+                    artist_id=artist_id,
+                    spotify_id=None,  # 필요시 별도로 앨범 정보 조회
+                    release_date=None
+                )
+                db.add(new_album)
+                await db.flush()
+                album_id = new_album.id
+            else:
+                album_id = album.id
+        
+        # 노래 생성
+        new_song = Song(
+            title=track_data.get('title', 'Unknown Title'),
+            duration_ms=track_data.get('duration_ms'),
+            preview_url=track_data.get('preview_url'),
+            spotify_id=track_data.get('spotify_id'),
+            artist_id=artist_id,
+            album_id=album_id
+        )
+        
+        db.add(new_song)
+        await db.flush()  # ID 생성을 위해 flush
+        
+        return new_song.id
+        
+    except Exception as e:
+        logger.error(f"트랙 저장 오류: {str(e)}")
+        return None
 
 # 플레이리스트 생성
 @router.post("/", response_model=PlaylistResponse, status_code=status.HTTP_201_CREATED)
@@ -351,113 +519,88 @@ async def add_song_to_playlist(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(provide_session)
 ):
-    """플레이리스트에 노래 추가"""
+    """플레이리스트에 단일 노래 추가 - 간단 버전"""
+    
+    print(f"\n=== 단일 노래 추가 시작 ===")
+    print(f"playlist_id: {playlist_id}")
+    print(f"song_id: {song_data.song_id}")
+    print(f"user_id: {current_user.id}")
+    
     try:
-        logger.info(f"플레이리스트 {playlist_id}에 노래 추가 시도: {song_data.song_id}")
-
-        # 0. song_id 유효성 사전 검사 - 수정된 부분
-        if not song_data.song_id or not isinstance(song_data.song_id, int) or song_data.song_id <= 0:
-            logger.error(f"Invalid song_id: {song_data.song_id}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="올바르지 않은 song_id입니다 (양의 정수여야 함)"
-            )
-
-        songIdNum = song_data.song_id  # int로 그대로 사용
-
-        # 1. 플레이리스트 권한 확인
+        # 1. 기본 검증
+        if not song_data.song_id or song_data.song_id <= 0:
+            raise HTTPException(400, "유효하지 않은 song_id입니다")
+        
+        # 2. 플레이리스트 권한 확인
         playlist_result = await db.execute(
             select(Playlist).where(
-                and_(
-                    Playlist.id == playlist_id,
-                    Playlist.user_id == current_user.id
-                )
+                and_(Playlist.id == playlist_id, Playlist.user_id == current_user.id)
             )
         )
         playlist = playlist_result.scalars().first()
         if not playlist:
-            logger.warning(f"플레이리스트 {playlist_id} 권한 없음 또는 존재하지 않음")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 플레이리스트가 없거나 수정 권한이 없습니다."
-            )
-
-        # 2. 노래 존재 확인
-        song_result = await db.execute(
-            select(Song).where(Song.id == songIdNum)
-        )
+            raise HTTPException(404, "플레이리스트를 찾을 수 없거나 권한이 없습니다")
+        
+        # 3. 노래 존재 확인
+        song_result = await db.execute(select(Song).where(Song.id == song_data.song_id))
         song = song_result.scalars().first()
         if not song:
-            logger.warning(f"노래 {songIdNum} 찾을 수 없음")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="해당 노래(song_id)를 찾을 수 없습니다."
-            )
-
-        # 3. 중복 확인
+            raise HTTPException(404, "노래를 찾을 수 없습니다")
+        
+        # 4. 중복 확인
         existing_result = await db.execute(
             select(PlaylistSong).where(
                 and_(
                     PlaylistSong.playlist_id == playlist_id,
-                    PlaylistSong.song_id == songIdNum
+                    PlaylistSong.song_id == song_data.song_id
                 )
             )
         )
         if existing_result.scalars().first():
-            logger.info(f"노래 {songIdNum}가 이미 플레이리스트 {playlist_id}에 존재")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="이미 이 플레이리스트에 추가된 노래입니다."
-            )
-
-        # 4. 다음 position 계산
+            raise HTTPException(400, "이미 플레이리스트에 있는 노래입니다")
+        
+        # 5. position 계산
         max_position_result = await db.execute(
             select(func.coalesce(func.max(PlaylistSong.position), 0))
             .where(PlaylistSong.playlist_id == playlist_id)
         )
         max_position = max_position_result.scalar() or 0
-
-        # 5. 노래 추가
+        new_position = max_position + 1
+        
+        # 6. 노래 추가 - 앨범 그룹 필드는 기본값으로 설정
         new_playlist_song = PlaylistSong(
             playlist_id=playlist_id,
-            song_id=songIdNum,
-            position=max_position + 1,
-            added_at=datetime.utcnow()
+            song_id=song_data.song_id,
+            position=new_position,
+            added_at=datetime.utcnow(),
+            # 앨범 그룹 관련 필드들은 기본값(None/False)으로 설정
+            album_group_id=None,
+            album_group_name=None,
+            is_album_group=False
         )
-
+        
         db.add(new_playlist_song)
         await db.commit()
-
-        logger.info(f"노래 추가 성공: playlist_id={playlist_id}, song_id={songIdNum}, position={max_position + 1}")
-
+        
+        print(f"✅ 노래 추가 성공: song_id={song_data.song_id}, position={new_position}")
+        
         return {
             "success": True,
-            "message": "플레이리스트에 노래가 추가되었습니다.",
-            "song_id": songIdNum,
-            "position": max_position + 1
+            "message": "플레이리스트에 노래가 추가되었습니다",
+            "song_id": song_data.song_id,
+            "position": new_position
         }
-
+        
     except HTTPException:
         raise
     except Exception as e:
         await db.rollback()
-        logger.error(f"노래 추가 중 예외 발생: playlist_id={playlist_id}, song_id={song_data.song_id}, error={str(e)}")
-        
-        # 상세한 에러 로깅
+        print(f"❌ 예상치 못한 오류: {str(e)}")
         import traceback
-        logger.error(f"상세한 에러 정보: {traceback.format_exc()}")
-
-        # foreign key 오류 등 상세한 안내 제공
-        if "foreign key" in str(e).lower() or "violates foreign key constraint" in str(e).lower():
-            raise HTTPException(
-                status_code=400,
-                detail="데이터베이스 무결성 오류: 유효하지 않은 song_id이거나 데이터가 DB에 저장되지 않았습니다."
-            )
-
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="노래 추가 중 서버 내부 오류가 발생했습니다."
-        )
+        print(f"스택 트레이스: {traceback.format_exc()}")
+        raise HTTPException(500, f"서버 오류: {str(e)}")
+    
+    print(f"=== 단일 노래 추가 완료 ===\n")
 
 # 플레이리스트에서 노래 삭제
 @router.delete("/{playlist_id}/songs/{song_id}")
@@ -732,3 +875,208 @@ async def delete_playlist(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"플레이리스트 삭제 중 오류가 발생했습니다: {str(e)}"
         )
+        
+# playlist_router.py - 앨범 추가용 별도 엔드포인트
+@router.post("/{playlist_id}/add-album")
+async def add_album_to_playlist(
+    playlist_id: int,
+    album_data: AlbumAddToPlaylist,  # DTO에 album_id 필드 있어야 함
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(provide_session)
+):
+    """플레이리스트에 앨범 전체 추가 - 별도 엔드포인트"""
+    
+    print(f"\n=== 앨범 추가 시작 ===")
+    print(f"playlist_id: {playlist_id}")
+    print(f"album_id: {album_data.album_id}")
+    
+    try:
+        # 1. 플레이리스트 권한 확인
+        playlist_result = await db.execute(
+            select(Playlist).where(
+                and_(Playlist.id == playlist_id, Playlist.user_id == current_user.id)
+            )
+        )
+        playlist = playlist_result.scalars().first()
+        if not playlist:
+            raise HTTPException(404, "플레이리스트를 찾을 수 없거나 권한이 없습니다")
+        
+        # 2. 앨범 트랙들 가져오기
+        tracks = await get_album_tracks(album_data.album_id)  # Spotify API 호출
+        
+        if not tracks:
+            raise HTTPException(404, "앨범 트랙을 찾을 수 없습니다")
+        
+        # 3. 그룹 ID 생성
+        album_group_id = f"album_{album_data.album_id}_{int(datetime.utcnow().timestamp())}"
+        album_name = tracks[0].get('album_name', 'Unknown Album') if tracks else 'Unknown Album'
+        
+        added_count = 0
+        skipped_count = 0
+        
+        # 4. 현재 최대 position 계산
+        max_position_result = await db.execute(
+            select(func.coalesce(func.max(PlaylistSong.position), 0))
+            .where(PlaylistSong.playlist_id == playlist_id)
+        )
+        current_max_position = max_position_result.scalar() or 0
+        
+        # 5. 각 트랙을 처리
+        for i, track in enumerate(tracks):
+            try:
+                # 트랙을 DB에 저장
+                song_id = await save_track_to_db(db, track, "spotify")
+                
+                if song_id:
+                    # 중복 확인
+                    existing = await db.execute(
+                        select(PlaylistSong).where(
+                            and_(
+                                PlaylistSong.playlist_id == playlist_id,
+                                PlaylistSong.song_id == song_id
+                            )
+                        )
+                    )
+                    
+                    if not existing.scalars().first():
+                        # 앨범 그룹으로 추가
+                        new_position = current_max_position + i + 1
+                        playlist_song = PlaylistSong(
+                            playlist_id=playlist_id,
+                            song_id=song_id,
+                            position=new_position,
+                            added_at=datetime.utcnow(),
+                            album_group_id=album_group_id,
+                            album_group_name=album_name,
+                            is_album_group=True
+                        )
+                        
+                        db.add(playlist_song)
+                        added_count += 1
+                        logger.info(f"트랙 추가됨: {track.get('title')} (position: {new_position})")
+                    else:
+                        skipped_count += 1
+                        logger.info(f"중복 트랙 건너뜀: {track.get('title')}")
+                else:
+                    logger.warning(f"트랙 저장 실패: {track.get('title')}")
+                    skipped_count += 1
+                    
+            except Exception as track_error:
+                logger.error(f"트랙 처리 중 오류: {track.get('title')} - {str(track_error)}")
+                skipped_count += 1
+                continue
+        
+        # 6. 커밋
+        await db.commit()
+        
+        logger.info(f"앨범 추가 완료: {added_count}개 추가, {skipped_count}개 건너뜀")
+        
+        return {
+            "success": True,
+            "message": f"앨범 '{album_name}'이 플레이리스트에 추가되었습니다",
+            "added_count": added_count,
+            "skipped_count": skipped_count,
+            "album_group_id": album_group_id,
+            "album_name": album_name
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"앨범 추가 오류: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(500, f"앨범 추가 중 오류가 발생했습니다: {str(e)}")
+    
+    print(f"=== 앨범 추가 완료 ===\n")
+
+# 플레이리스트 노래 순서 변경
+@router.put("/{playlist_id}/songs/{song_id}/position")
+async def update_song_position(
+    playlist_id: int,
+    song_id: int,
+    new_position: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(provide_session)
+):
+    """플레이리스트 내 노래 순서 변경"""
+    try:
+        logger.info(f"노래 {song_id} 위치 변경: {new_position}")
+        
+        # 플레이리스트 권한 확인
+        playlist_result = await db.execute(
+            select(Playlist).where(
+                and_(Playlist.id == playlist_id, Playlist.user_id == current_user.id)
+            )
+        )
+        if not playlist_result.scalars().first():
+            raise HTTPException(404, "플레이리스트를 찾을 수 없거나 권한이 없습니다")
+        
+        # 현재 노래의 위치 확인
+        current_song_result = await db.execute(
+            select(PlaylistSong).where(
+                and_(
+                    PlaylistSong.playlist_id == playlist_id,
+                    PlaylistSong.song_id == song_id
+                )
+            )
+        )
+        current_song = current_song_result.scalars().first()
+        if not current_song:
+            raise HTTPException(404, "플레이리스트에서 노래를 찾을 수 없습니다")
+        
+        old_position = current_song.position
+        
+        if old_position == new_position:
+            return {"success": True, "message": "위치가 동일합니다"}
+        
+        # 다른 노래들의 위치 조정
+        if old_position < new_position:
+            # 아래로 이동: old_position+1 ~ new_position 사이의 노래들을 위로 이동
+            await db.execute(
+                select(PlaylistSong).where(
+                    and_(
+                        PlaylistSong.playlist_id == playlist_id,
+                        PlaylistSong.position > old_position,
+                        PlaylistSong.position <= new_position
+                    )
+                ).execution_options(synchronize_session="evaluate")
+            )
+            # 실제 업데이트
+            await db.execute(
+                PlaylistSong.__table__.update().where(
+                    and_(
+                        PlaylistSong.playlist_id == playlist_id,
+                        PlaylistSong.position > old_position,
+                        PlaylistSong.position <= new_position
+                    )
+                ).values(position=PlaylistSong.position - 1)
+            )
+        else:
+            # 위로 이동: new_position ~ old_position-1 사이의 노래들을 아래로 이동
+            await db.execute(
+                PlaylistSong.__table__.update().where(
+                    and_(
+                        PlaylistSong.playlist_id == playlist_id,
+                        PlaylistSong.position >= new_position,
+                        PlaylistSong.position < old_position
+                    )
+                ).values(position=PlaylistSong.position + 1)
+            )
+        
+        # 대상 노래의 위치 업데이트
+        current_song.position = new_position
+        
+        await db.commit()
+        
+        return {
+            "success": True,
+            "message": f"노래 위치가 {old_position}에서 {new_position}으로 변경되었습니다"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"위치 변경 오류: {str(e)}")
+        raise HTTPException(500, f"위치 변경 중 오류가 발생했습니다: {str(e)}")
